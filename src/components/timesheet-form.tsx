@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -39,6 +39,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
 import { Separator } from "@/components/ui/separator"
 
@@ -710,6 +718,39 @@ export default function TimeSheetForm() {
             </Button>
         </div>
       </CardContent>
+      <Separator className="my-4" />
+        <CardContent>
+            <div className="space-y-4">
+                <h3 className="text-xl font-semibold text-center flex items-center justify-center">
+                    <ClipboardList className="mr-2 h-5 w-5" />
+                    Review Entries
+                </h3>
+                {timesheetEntries.length > 0 ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>ID</TableHead>
+                                <TableHead>Customer</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Hours</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {timesheetEntries.map((entry) => (
+                                <TableRow key={entry.id}>
+                                    <TableCell className="font-medium">{entry.id}</TableCell>
+                                    <TableCell>{entry.customer}</TableCell>
+                                    <TableCell>{format(entry.date, 'PPP')}</TableCell>
+                                    <TableCell>{calculateHours(entry.entranceTime, entry.exitTime).toFixed(2)}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                ) : (
+                    <p className="text-sm text-muted-foreground text-center">No entries have been saved yet.</p>
+                )}
+            </div>
+        </CardContent>
     </Card>
   )
 }
