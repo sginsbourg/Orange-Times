@@ -35,6 +35,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -956,8 +957,13 @@ export default function TimeSheetForm() {
                 )}
             </div>
         </CardContent>
+        <CardFooter className="justify-center text-xs text-muted-foreground">
+            Version 0.1.0
+        </CardFooter>
     </Card>
   )
 }
+
+    
 
     
