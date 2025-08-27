@@ -88,6 +88,8 @@ type FormData = z.infer<typeof formSchema>;
 type TimesheetEntry = FormData & { id: string };
 
 const DAILY_FORM_STORAGE_KEY = "timesheetFormData";
+const MONTHLY_FORM_STORAGE_KEY = "timesheetMonthlyFormData";
+const NEW_CUSTOMER_FORM_STORAGE_KEY = "timesheetNewCustomerFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
 const CUSTOMERS_KEY = "timesheetCustomers";
@@ -121,7 +123,9 @@ export default function TimeSheetForm() {
   });
 
 
-  const watchedValues = form.watch();
+  const watchedDailyForm = form.watch();
+  const watchedMonthlyForm = monthlyReportForm.watch();
+  const watchedNewCustomerForm = newCustomerForm.watch();
   const watchedMonthlyCustomer = monthlyReportForm.watch("customer");
 
   const calculateHours = (entrance: string, exit: string): number => {
@@ -146,6 +150,21 @@ export default function TimeSheetForm() {
         form.reset(validatedData);
       }
       
+      const savedMonthlyData = localStorage.getItem(MONTHLY_FORM_STORAGE_KEY);
+      if (savedMonthlyData) {
+        const parsedData = JSON.parse(savedMonthlyData);
+        const validatedData = {
+          ...parsedData,
+          month: parsedData.month ? new Date(parsedData.month) : new Date(),
+        };
+        monthlyReportForm.reset(validatedData);
+      }
+
+      const savedNewCustomerData = localStorage.getItem(NEW_CUSTOMER_FORM_STORAGE_KEY);
+      if (savedNewCustomerData) {
+        newCustomerForm.reset(JSON.parse(savedNewCustomerData));
+      }
+
       const savedEntries = localStorage.getItem(TIMESHEET_ENTRIES_KEY);
       if(savedEntries) {
           const parsedEntries = JSON.parse(savedEntries);
@@ -166,18 +185,37 @@ export default function TimeSheetForm() {
   useEffect(() => {
     if (isMounted) {
       try {
-        const dataToSave = JSON.stringify(watchedValues);
-        localStorage.setItem(DAILY_FORM_STORAGE_KEY, dataToSave);
-        setCalculatedHours(calculateHours(watchedValues.entranceTime, watchedValues.exitTime));
+        localStorage.setItem(DAILY_FORM_STORAGE_KEY, JSON.stringify(watchedDailyForm));
+        setCalculatedHours(calculateHours(watchedDailyForm.entranceTime, watchedDailyForm.exitTime));
       } catch (error) {
-        console.error("Failed to save data to localStorage", error);
+        console.error("Failed to save daily form data to localStorage", error);
       }
     }
-  }, [watchedValues, isMounted]);
+  }, [watchedDailyForm, isMounted]);
 
   useEffect(() => {
-     setCalculatedHours(calculateHours(watchedValues.entranceTime, watchedValues.exitTime));
-  }, [watchedValues.entranceTime, watchedValues.exitTime]);
+    if (isMounted) {
+      try {
+        localStorage.setItem(MONTHLY_FORM_STORAGE_KEY, JSON.stringify(watchedMonthlyForm));
+      } catch (error) {
+        console.error("Failed to save monthly form data to localStorage", error);
+      }
+    }
+  }, [watchedMonthlyForm, isMounted]);
+
+  useEffect(() => {
+    if (isMounted) {
+      try {
+        localStorage.setItem(NEW_CUSTOMER_FORM_STORAGE_KEY, JSON.stringify(watchedNewCustomerForm));
+      } catch (error) {
+        console.error("Failed to save new customer form data to localStorage", error);
+      }
+    }
+  }, [watchedNewCustomerForm, isMounted]);
+
+  useEffect(() => {
+     setCalculatedHours(calculateHours(watchedDailyForm.entranceTime, watchedDailyForm.exitTime));
+  }, [watchedDailyForm.entranceTime, watchedDailyForm.exitTime]);
 
   useEffect(() => {
     if (watchedMonthlyCustomer) {
@@ -579,7 +617,7 @@ export default function TimeSheetForm() {
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Customer</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                                     <FormControl>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select a customer" />
