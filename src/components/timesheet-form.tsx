@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building, ListPlus, Trash2 } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building, ListPlus, Trash2, FileText } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -47,6 +47,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
@@ -114,6 +122,14 @@ const NEW_PROJECT_FORM_STORAGE_KEY = "timesheetNewProjectFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
 const CUSTOMERS_KEY = "timesheetCustomers";
+
+const readmeContent = `
+# Firebase Studio
+
+This is a NextJS starter in Firebase Studio.
+
+To get started, take a look at src/app/page.tsx.
+`;
 
 
 export default function TimeSheetForm() {
@@ -957,13 +973,40 @@ export default function TimeSheetForm() {
                 )}
             </div>
         </CardContent>
-        <CardFooter className="justify-center text-xs text-muted-foreground">
+        <Separator className="my-4" />
+        <CardContent>
+            <div className="space-y-4">
+                <h3 className="text-xl font-semibold text-center flex items-center justify-center">
+                    <FileText className="mr-2 h-5 w-5" />
+                    Documentation
+                </h3>
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button variant="outline" className="w-full">
+                            <FileText className="mr-2 h-4 w-4" /> View Documentation
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[625px]">
+                        <DialogHeader>
+                        <DialogTitle>README.md</DialogTitle>
+                        <DialogDescription>
+                            Application documentation.
+                        </DialogDescription>
+                        </DialogHeader>
+                        <div className="prose prose-sm max-w-none">
+                            <pre className="bg-muted p-4 rounded-md overflow-x-auto text-sm">
+                                <code>
+                                    {readmeContent}
+                                </code>
+                            </pre>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            </div>
+        </CardContent>
+        <CardFooter className="justify-center text-xs text-muted-foreground pt-6">
             Version 0.1.0
         </CardFooter>
     </Card>
   )
 }
-
-    
-
-    
