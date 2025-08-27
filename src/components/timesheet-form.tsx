@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -78,6 +78,11 @@ const monthlyReportSchema = z.object({
     customerEmail: z.string().email("Please enter a valid email.").optional().or(z.literal('')),
 });
 
+const newCustomerSchema = z.object({
+    newCustomerName: z.string().min(1, "Customer name is required."),
+    newCustomerEmail: z.string().email("Please enter a valid email.").optional().or(z.literal('')),
+});
+
 
 type FormData = z.infer<typeof formSchema>;
 type TimesheetEntry = FormData & { id: string };
@@ -106,6 +111,15 @@ export default function TimeSheetForm() {
   const monthlyReportForm = useForm<z.infer<typeof monthlyReportSchema>>({
     resolver: zodResolver(monthlyReportSchema),
   });
+  
+  const newCustomerForm = useForm<z.infer<typeof newCustomerSchema>>({
+    resolver: zodResolver(newCustomerSchema),
+    defaultValues: {
+      newCustomerName: "",
+      newCustomerEmail: "",
+    },
+  });
+
 
   const watchedValues = form.watch();
   const watchedMonthlyCustomer = monthlyReportForm.watch("customer");
@@ -363,6 +377,29 @@ export default function TimeSheetForm() {
     }
   };
 
+  const handleAddNewCustomer = (values: z.infer<typeof newCustomerSchema>) => {
+    const newCustomer: Customer = {
+        name: values.newCustomerName,
+        email: values.newCustomerEmail || "",
+    };
+    if (customers.some(c => c.name.toLowerCase() === newCustomer.name.toLowerCase())) {
+        toast({
+            title: "Customer Exists",
+            description: "A customer with this name already exists.",
+            variant: "destructive",
+        });
+        return;
+    }
+    const updatedCustomers = [...customers, newCustomer];
+    setCustomers(updatedCustomers);
+    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
+    toast({
+        title: "Customer Added",
+        description: `Successfully added ${newCustomer.name}.`,
+    });
+    newCustomerForm.reset();
+  };
+
 
   return (
     <Card className="w-full max-w-lg shadow-lg">
@@ -489,6 +526,46 @@ export default function TimeSheetForm() {
             </div>
           </form>
         </Form>
+      </CardContent>
+      <Separator className="my-4" />
+       <CardContent>
+        <div className="space-y-4">
+            <h3 className="text-xl font-semibold text-center flex items-center justify-center"><UserPlus className="mr-2 h-5 w-5" />Add New Customer</h3>
+             <Form {...newCustomerForm}>
+                <form onSubmit={newCustomerForm.handleSubmit(handleAddNewCustomer)} className="space-y-4">
+                    <FormField
+                        control={newCustomerForm.control}
+                        name="newCustomerName"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Customer Name</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="Enter customer's full name" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={newCustomerForm.control}
+                        name="newCustomerEmail"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4 text-muted-foreground" />Customer Email</FormLabel>
+                                <FormControl>
+                                    <Input type="email" placeholder="Enter customer's email (optional)" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <Button type="submit" className="w-full">
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Add Customer
+                    </Button>
+                </form>
+            </Form>
+        </div>
       </CardContent>
       <Separator className="my-4" />
       <CardContent>
