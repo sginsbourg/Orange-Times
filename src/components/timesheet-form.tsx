@@ -4,8 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass } from "lucide-react"
-import { useEffect, useState } from "react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book } from "lucide-react"
+import { useEffect, useState, useMemo } from "react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -40,6 +40,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
+import { Separator } from "@/components/ui/separator"
 
 const customers = [
   "Innovate Inc.",
@@ -66,16 +67,24 @@ const formSchema = z.object({
     path: ["exitTime"],
 });
 
+const monthlyReportSchema = z.object({
+    customer: z.string({ required_error: "Please select a customer." }),
+    month: z.date({ required_error: "Please select a month." }),
+});
+
 
 type FormData = z.infer<typeof formSchema>;
+type TimesheetEntry = FormData & { id: string };
 
-const LOCAL_STORAGE_KEY = "timesheetFormData";
+const DAILY_FORM_STORAGE_KEY = "timesheetFormData";
+const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
 
 export default function TimeSheetForm() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
   const [calculatedHours, setCalculatedHours] = useState<number>(0);
+  const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -83,7 +92,11 @@ export default function TimeSheetForm() {
       entranceTime: "10:00",
       exitTime: "15:00",
     },
-  })
+  });
+
+  const monthlyReportForm = useForm<z.infer<typeof monthlyReportSchema>>({
+    resolver: zodResolver(monthlyReportSchema),
+  });
 
   const watchedValues = form.watch();
 
@@ -97,10 +110,11 @@ export default function TimeSheetForm() {
   }
 
   useEffect(() => {
+    setIsMounted(true);
     try {
-      const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (savedData) {
-        const parsedData = JSON.parse(savedData);
+      const savedDailyData = localStorage.getItem(DAILY_FORM_STORAGE_KEY);
+      if (savedDailyData) {
+        const parsedData = JSON.parse(savedDailyData);
         const validatedData = {
           ...parsedData,
           date: parsedData.date ? new Date(parsedData.date) : new Date(),
@@ -110,25 +124,32 @@ export default function TimeSheetForm() {
       } else {
         setCalculatedHours(calculateHours(form.getValues("entranceTime"), form.getValues("exitTime")));
       }
+      
+      const savedEntries = localStorage.getItem(TIMESHEET_ENTRIES_KEY);
+      if(savedEntries) {
+          const parsedEntries = JSON.parse(savedEntries);
+          const validatedEntries = parsedEntries.map((e: any) => ({...e, date: new Date(e.date)}));
+          setTimesheetEntries(validatedEntries);
+      }
+
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
       setCalculatedHours(calculateHours(form.getValues("entranceTime"), form.getValues("exitTime")));
     }
-    setIsMounted(true);
   }, [form]);
 
   useEffect(() => {
     if (isMounted) {
       try {
         const dataToSave = JSON.stringify(watchedValues);
-        localStorage.setItem(LOCAL_STORAGE_KEY, dataToSave);
+        localStorage.setItem(DAILY_FORM_STORAGE_KEY, dataToSave);
         setCalculatedHours(calculateHours(watchedValues.entranceTime, watchedValues.exitTime));
       } catch (error) {
         console.error("Failed to save data to localStorage", error);
       }
     }
   }, [watchedValues, isMounted]);
-
+  
   const generateReportId = (): string => {
     const now = new Date();
     const yearMonth = format(now, 'yyyy-MM');
@@ -147,28 +168,41 @@ export default function TimeSheetForm() {
 
     } catch (error) {
       console.error("Failed to manage report ID counter", error);
-      // Continue with default counter if localStorage fails
     }
     
     return `${yearMonth}-${String(counter).padStart(4, '0')}`;
   }
+  
+  const addTimesheetEntry = (entry: FormData) => {
+    const reportId = generateReportId();
+    const newEntry: TimesheetEntry = { ...entry, id: reportId };
+    const updatedEntries = [...timesheetEntries, newEntry];
+    setTimesheetEntries(updatedEntries);
+    try {
+        localStorage.setItem(TIMESHEET_ENTRIES_KEY, JSON.stringify(updatedEntries));
+    } catch (error) {
+        console.error("Failed to save entries to localStorage", error);
+    }
+    return newEntry;
+  }
+  
 
-  const generateCsvContent = (values: FormData, id: string) => {
+  const generateCsvContent = (values: TimesheetEntry) => {
     const headers = "ID,Customer,Date,Hours";
     const hours = calculateHours(values.entranceTime, values.exitTime);
-    const row = `"${id}","${values.customer}","${format(values.date, "yyyy-MM-dd")}","${hours}"`;
+    const row = `"${values.id}","${values.customer}","${format(values.date, "yyyy-MM-dd")}","${hours}"`;
     return `${headers}\n${row}`;
   }
 
   const handleSaveToFile = (values: FormData) => {
     try {
-      const reportId = generateReportId();
-      const csvContent = generateCsvContent(values, reportId);
+      const newEntry = addTimesheetEntry(values);
+      const csvContent = generateCsvContent(newEntry);
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      const fileName = `timesheet-${reportId}.csv`;
+      const fileName = `timesheet-${newEntry.id}.csv`;
       link.setAttribute("download", fileName);
       document.body.appendChild(link);
 
@@ -178,7 +212,7 @@ export default function TimeSheetForm() {
       
       toast({
         title: "Success!",
-        description: `Report ${reportId} has been saved to a file.`,
+        description: `Report ${newEntry.id} has been saved to a file.`,
       });
 
     } catch (error) {
@@ -192,10 +226,10 @@ export default function TimeSheetForm() {
 
   const handleExportToEmail = (values: FormData) => {
     try {
-      const reportId = generateReportId();
-      const csvContent = generateCsvContent(values, reportId);
-      const subject = `Timesheet Report ${reportId} for ${values.customer}`;
-      const body = `Hi,\n\nPlease find the attached timesheet data (Report ID: ${reportId}).\n\n${csvContent}\n\nThanks,`;
+      const newEntry = addTimesheetEntry(values);
+      const csvContent = generateCsvContent(newEntry);
+      const subject = `Timesheet Report ${newEntry.id} for ${values.customer}`;
+      const body = `Hi,\n\nPlease find the attached timesheet data (Report ID: ${newEntry.id}).\n\n${csvContent}\n\nThanks,`;
       const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.location.href = mailtoLink;
        toast({
@@ -211,10 +245,62 @@ export default function TimeSheetForm() {
     }
   };
 
+  const handleMonthlyReport = (values: z.infer<typeof monthlyReportSchema>) => {
+    try {
+      const { customer, month } = values;
+      const reportYear = month.getFullYear();
+      const reportMonth = month.getMonth();
+
+      const filteredEntries = timesheetEntries.filter(entry => 
+        entry.customer === customer &&
+        entry.date.getFullYear() === reportYear &&
+        entry.date.getMonth() === reportMonth
+      );
+
+      if (filteredEntries.length === 0) {
+        toast({
+          title: "No Data",
+          description: `No timesheet entries found for ${customer} in ${format(month, "MMMM yyyy")}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const headers = "ID,Customer,Date,Hours";
+      const rows = filteredEntries.map(entry => {
+        const hours = calculateHours(entry.entranceTime, entry.exitTime);
+        return `"${entry.id}","${entry.customer}","${format(entry.date, "yyyy-MM-dd")}","${hours}"`;
+      });
+
+      const csvContent = `${headers}\n${rows.join("\n")}`;
+      const totalHours = filteredEntries.reduce((acc, entry) => acc + calculateHours(entry.entranceTime, entry.exitTime), 0);
+
+      const subject = `Monthly Timesheet Report for ${customer} - ${format(month, "MMMM yyyy")}`;
+      const body = `Hi,\n\nPlease find the monthly timesheet report for ${customer} for ${format(month, "MMMM yyyy")}.\n\nTotal Hours: ${totalHours.toFixed(2)}\n\n--- CSV Data ---\n${csvContent}\n\nThanks,`;
+      const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      
+      window.location.href = mailtoLink;
+      
+      toast({
+        title: "Success!",
+        description: `Monthly report for ${customer} has been prepared for email.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error generating report",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+
   function onSubmit(values: z.infer<typeof formSchema>) {
-    // This function can be used for server submission if needed in the future.
-    // For now, buttons have their own handlers.
-    console.log("Form submitted", values);
+    addTimesheetEntry(values);
+    toast({
+      title: "Entry Saved!",
+      description: "Your timesheet entry has been saved locally.",
+    });
   }
 
   return (
@@ -327,8 +413,12 @@ export default function TimeSheetForm() {
             </div>
             
             <div className="flex flex-col sm:flex-row gap-2">
-                <Button type="button" onClick={form.handleSubmit(handleSaveToFile)} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                <Button type="submit" className="w-full">
                     <Save className="mr-2 h-4 w-4" />
+                    Save Entry
+                </Button>
+                <Button type="button" onClick={form.handleSubmit(handleSaveToFile)} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                    <Download className="mr-2 h-4 w-4" />
                     Save to File
                 </Button>
                 <Button type="button" onClick={form.handleSubmit(handleExportToEmail)} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
@@ -338,6 +428,83 @@ export default function TimeSheetForm() {
             </div>
           </form>
         </Form>
+      </CardContent>
+      <Separator className="my-4" />
+      <CardContent>
+        <div className="space-y-4">
+            <h3 className="text-xl font-semibold text-center flex items-center justify-center"><Book className="mr-2 h-5 w-5" />Monthly Report</h3>
+             <Form {...monthlyReportForm}>
+                <form onSubmit={monthlyReportForm.handleSubmit(handleMonthlyReport)} className="space-y-4">
+                    <FormField
+                        control={monthlyReportForm.control}
+                        name="customer"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Customer</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a customer" />
+                                    </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                    {customers.map((customer) => (
+                                        <SelectItem key={customer} value={customer}>
+                                        {customer}
+                                        </SelectItem>
+                                    ))}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={monthlyReportForm.control}
+                        name="month"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-col">
+                                <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Month</FormLabel>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <FormControl>
+                                            <Button
+                                                variant={"outline"}
+                                                className={cn(
+                                                    "w-full justify-start text-left font-normal",
+                                                    !field.value && "text-muted-foreground"
+                                                )}
+                                            >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {field.value ? format(field.value, "MMMM yyyy") : <span>Pick a month</span>}
+                                            </Button>
+                                        </FormControl>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            mode="single"
+                                            selected={field.value}
+                                            onSelect={field.onChange}
+                                            defaultMonth={field.value}
+                                            onMonthChange={field.onChange}
+                                            captionLayout="dropdown-buttons"
+                                            fromYear={2020}
+                                            toYear={new Date().getFullYear()}
+                                            disabled={(date) => date > new Date()}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
+                        <Mail className="mr-2 h-4 w-4" />
+                        Email Monthly Report
+                    </Button>
+                </form>
+            </Form>
+        </div>
       </CardContent>
     </Card>
   )
