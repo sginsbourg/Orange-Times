@@ -569,7 +569,7 @@ export default function TimeSheetForm() {
         return `- ${format(new Date(entry.date), "PPP")}: ${hours.toFixed(2)} hours on "${entry.project}"`;
       }).join("\n");
 
-      const body = `Hi,\n\nPlease find the monthly timesheet report for ${customer} for ${format(month, "MMMM yyyy")}.\n\nTotal Hours: ${totalHours.toFixed(2)}\n\n---\n\nEntries:\n${detailedEntries}\n\n---\n\nCSV Data:\n${csvContent}\n\nThanks,`;
+      const body = `Hi,\n\nPlease find the monthly timesheet report for ${customer} for ${format(month, "MMMM yyyy")}.\n\n**Total Hours: ${totalHours.toFixed(2)}**\n\n---\n\nEntries:\n${detailedEntries}\n\n---\n\nCSV Data:\n${csvContent}\n\nThanks,`;
       
       const mailtoLink = `mailto:${customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       
