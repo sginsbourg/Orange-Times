@@ -79,8 +79,8 @@ export default function TimeSheetForm() {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      entranceTime: "09:00",
-      exitTime: "17:00",
+      entranceTime: "10:00",
+      exitTime: "15:00",
     },
   })
 
