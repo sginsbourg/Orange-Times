@@ -476,11 +476,16 @@ export default function TimeSheetForm() {
   const handleExportToEmail = (values: FormData) => {
     try {
       const newEntry = addTimesheetEntry(values);
-      const csvContent = generateCsvContent([newEntry]);
+      const hours = calculateHours(newEntry.entranceTime, newEntry.exitTime);
+      const customerDetails = customers.find(c => c.name === newEntry.customer);
+      const companyName = customerDetails ? customerDetails.companyName : '';
+      
       const subject = `Timesheet Report ${newEntry.id} for ${values.customer}`;
-      const body = `Hi,\n\nPlease find the attached timesheet data (Report ID: ${newEntry.id}).\n\n${csvContent}\n\nThanks,`;
+      const body = `Hi,\n\nThis is a timesheet entry for ${values.customer} (${companyName}).\n\n- **Project**: ${values.project}\n- **Date**: ${format(values.date, "PPP")}\n- **Total Hours**: ${hours.toFixed(2)}\n\nTo create a CSV file, please use the "Save to File" button and attach the file to your email.\n\nThanks,`;
       const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      
       window.location.href = mailtoLink;
+      
        toast({
         title: "Success!",
         description: "Your email client has been opened.",
