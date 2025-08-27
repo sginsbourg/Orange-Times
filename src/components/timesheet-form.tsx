@@ -135,7 +135,7 @@ const NEW_PROJECT_FORM_STORAGE_KEY = "timesheetNewProjectFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
 const CUSTOMERS_KEY = "timesheetCustomers";
-const APP_VERSION = "0.1.9";
+const APP_VERSION = "0.2.2";
 
 const readmeContent = `# Orange Times - User Manual & Technical Specifications
 
@@ -834,9 +834,13 @@ export default function TimeSheetForm() {
   return (
     <Card className="w-full max-w-lg shadow-lg">
       <CardHeader className="text-center space-y-2">
-        <CardTitle className="text-3xl font-headline">Orange Times</CardTitle>
-        <CardDescription className="font-bold text-sm">Create your CSV hours report in a few clicks</CardDescription>
-        <CardDescription className="text-xs">Optimized for Android on Samsung Galaxy 24 Plus</CardDescription>
+        <CardTitle className="text-3xl font-headline text-primary">Orange Times</CardTitle>
+        <CardDescription className="font-bold text-xs">
+          Create your CSV hours report in a few clicks
+        </CardDescription>
+        <CardDescription className="text-xs">
+          Optimized for Android on Samsung Galaxy 24 Plus
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
