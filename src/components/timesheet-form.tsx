@@ -442,7 +442,7 @@ export default function TimeSheetForm() {
   return (
     <Card className="w-full max-w-lg shadow-lg">
       <CardHeader className="text-center space-y-2">
-        <CardTitle className="text-3xl font-headline">TimeSheetGen</CardTitle>
+        <CardTitle className="text-3xl font-headline">Orange Times</CardTitle>
         <CardDescription>Create your CSV hours report in a few clicks.</CardDescription>
       </CardHeader>
       <CardContent>
