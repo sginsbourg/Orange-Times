@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building, ListPlus, Trash2, FileText, Loader2 } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building, ListPlus, Trash2, FileText, Loader2, RefreshCw } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -239,6 +239,7 @@ export default function TimeSheetForm() {
   const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+  const [isSyncingCustomers, setIsSyncingCustomers] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -648,6 +649,50 @@ export default function TimeSheetForm() {
     }
   };
 
+  const handleSyncCustomers = async () => {
+    setIsSyncingCustomers(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+        for (const customer of customers) {
+            try {
+                const result = await addCustomer(customer);
+                if (result.success) {
+                    successCount++;
+                } else {
+                    errorCount++;
+                    console.error(`Failed to sync customer ${customer.name}: ${result.error}`);
+                }
+            } catch (e) {
+                errorCount++;
+                console.error(`Error syncing customer ${customer.name}`, e);
+            }
+        }
+
+        if (errorCount > 0) {
+            toast({
+                title: "Sync Partially Successful",
+                description: `${successCount} customers synced, ${errorCount} failed. Check console for details.`,
+                variant: "destructive",
+            });
+        } else {
+            toast({
+                title: "Sync Complete!",
+                description: `Successfully synced all ${successCount} customers with the server.`,
+            });
+        }
+    } catch (error) {
+        toast({
+            title: "Sync Failed",
+            description: "An unexpected error occurred during the sync process.",
+            variant: "destructive",
+        });
+    } finally {
+        setIsSyncingCustomers(false);
+    }
+};
+
   const handleAddNewProject = (values: z.infer<typeof newProjectSchema>) => {
     const { customerForProject, newProjectName } = values;
     const updatedCustomers = customers.map(c => {
@@ -890,14 +935,24 @@ export default function TimeSheetForm() {
                             </FormItem>
                         )}
                     />
-                    <Button type="submit" className="w-full" disabled={isAddingCustomer}>
-                        {isAddingCustomer ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <UserPlus className="mr-2 h-4 w-4" />
-                        )}
-                        Add Customer
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button type="submit" className="w-full" disabled={isAddingCustomer || isSyncingCustomers}>
+                          {isAddingCustomer ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                              <UserPlus className="mr-2 h-4 w-4" />
+                          )}
+                          Add Customer
+                      </Button>
+                      <Button type="button" variant="outline" className="w-full" onClick={handleSyncCustomers} disabled={isAddingCustomer || isSyncingCustomers}>
+                          {isSyncingCustomers ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                              <RefreshCw className="mr-2 h-4 w-4" />
+                          )}
+                          Sync Customers
+                      </Button>
+                    </div>
                 </form>
             </Form>
         </div>
