@@ -4,7 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save } from "lucide-react"
+import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -60,44 +61,110 @@ const formSchema = z.object({
   }),
 })
 
+type FormData = z.infer<typeof formSchema>;
+
+const LOCAL_STORAGE_KEY = "timesheetFormData";
+
 export default function TimeSheetForm() {
   const { toast } = useToast();
+  const [isMounted, setIsMounted] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       hours: 8,
     },
   })
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      const headers = "Customer,Date,Hours";
-      const row = `"${values.customer}","${format(values.date, "yyyy-MM-dd")}","${values.hours}"`;
-      const csvContent = `data:text/csv;charset=utf-8,${headers}\n${row}`;
+  const watchedValues = form.watch();
 
-      const encodedUri = encodeURI(csvContent);
+  useEffect(() => {
+    try {
+      const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedData) {
+        const parsedData = JSON.parse(savedData);
+        // Zod safe parsing could be added here for more safety
+        form.reset({
+          ...parsedData,
+          date: new Date(parsedData.date)
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load data from localStorage", error);
+    }
+    setIsMounted(true);
+  }, [form]);
+
+  useEffect(() => {
+    if (isMounted) {
+      try {
+        const dataToSave = JSON.stringify(watchedValues);
+        localStorage.setItem(LOCAL_STORAGE_KEY, dataToSave);
+      } catch (error) {
+        console.error("Failed to save data to localStorage", error);
+      }
+    }
+  }, [watchedValues, isMounted]);
+
+  const generateCsvContent = (values: FormData) => {
+    const headers = "Customer,Date,Hours";
+    const row = `"${values.customer}","${format(values.date, "yyyy-MM-dd")}","${values.hours}"`;
+    return `${headers}\n${row}`;
+  }
+
+  const handleSaveToFile = (values: FormData) => {
+    try {
+      const csvContent = generateCsvContent(values);
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
+      link.setAttribute("href", url);
       const fileName = `timesheet-${values.customer.replace(/[\s.]+/g, '-')}-${format(values.date, "yyyy-MM-dd")}.csv`;
       link.setAttribute("download", fileName);
       document.body.appendChild(link);
 
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       
       toast({
         title: "Success!",
-        description: "Your timesheet has been exported.",
+        description: "Your timesheet has been saved to a file.",
       });
 
     } catch (error) {
        toast({
-        title: "Error exporting CSV",
+        title: "Error saving file",
         description: "Something went wrong. Please try again.",
         variant: "destructive",
       });
     }
+  }
+
+  const handleExportToEmail = (values: FormData) => {
+    try {
+      const csvContent = generateCsvContent(values);
+      const subject = `Timesheet for ${values.customer} on ${format(values.date, "yyyy-MM-dd")}`;
+      const body = `Hi,\n\nPlease find the attached timesheet data.\n\n${csvContent}\n\nThanks,`;
+      const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = mailtoLink;
+       toast({
+        title: "Success!",
+        description: "Your email client has been opened.",
+      });
+    } catch (error) {
+       toast({
+        title: "Error exporting to email",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  function onSubmit(values: z.infer<typeof formSchema>) {
+    // This function can be used for server submission if needed in the future.
+    // For now, buttons have their own handlers.
+    console.log("Form submitted", values);
   }
 
   return (
@@ -115,7 +182,7 @@ export default function TimeSheetForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Customer</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a customer" />
@@ -181,16 +248,22 @@ export default function TimeSheetForm() {
                 <FormItem>
                   <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4 text-muted-foreground" />Hours Worked</FormLabel>
                   <FormControl>
-                    <Input type="number" step="0.1" placeholder="e.g. 8" {...field} />
+                    <Input type="number" step="0.1" placeholder="e.g. 8" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-             <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-              <Download className="mr-2 h-4 w-4" />
-              Export to CSV
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2">
+                <Button type="button" onClick={form.handleSubmit(handleSaveToFile)} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                    <Save className="mr-2 h-4 w-4" />
+                    Save to File
+                </Button>
+                <Button type="button" onClick={form.handleSubmit(handleExportToEmail)} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
+                    <Mail className="mr-2 h-4 w-4" />
+                    Export to Email
+                </Button>
+            </div>
           </form>
         </Form>
       </CardContent>
