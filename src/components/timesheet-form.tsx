@@ -64,6 +64,7 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 const LOCAL_STORAGE_KEY = "timesheetFormData";
+const ID_COUNTER_KEY = "timesheetIdCounter";
 
 export default function TimeSheetForm() {
   const { toast } = useToast();
@@ -83,7 +84,6 @@ export default function TimeSheetForm() {
       const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (savedData) {
         const parsedData = JSON.parse(savedData);
-        // Zod safe parsing could be added here for more safety
         form.reset({
           ...parsedData,
           date: new Date(parsedData.date)
@@ -106,20 +106,45 @@ export default function TimeSheetForm() {
     }
   }, [watchedValues, isMounted]);
 
-  const generateCsvContent = (values: FormData) => {
-    const headers = "Customer,Date,Hours";
-    const row = `"${values.customer}","${format(values.date, "yyyy-MM-dd")}","${values.hours}"`;
+  const generateReportId = (): string => {
+    const now = new Date();
+    const yearMonth = format(now, 'yyyy-MM');
+    let counter = 1;
+
+    try {
+      const storedCounters = localStorage.getItem(ID_COUNTER_KEY);
+      const counters = storedCounters ? JSON.parse(storedCounters) : {};
+      
+      if (counters[yearMonth]) {
+        counter = counters[yearMonth] + 1;
+      }
+      
+      counters[yearMonth] = counter;
+      localStorage.setItem(ID_COUNTER_KEY, JSON.stringify(counters));
+
+    } catch (error) {
+      console.error("Failed to manage report ID counter", error);
+      // Continue with default counter if localStorage fails
+    }
+    
+    return `${yearMonth}-${String(counter).padStart(4, '0')}`;
+  }
+
+  const generateCsvContent = (values: FormData, id: string) => {
+    const headers = "ID,Customer,Date,Hours";
+    const row = `"${id}","${values.customer}","${format(values.date, "yyyy-MM-dd")}","${values.hours}"`;
     return `${headers}\n${row}`;
   }
 
   const handleSaveToFile = (values: FormData) => {
     try {
-      const csvContent = generateCsvContent(values);
+      const reportId = generateReportId();
+      const csvContent = generateCsvContent(values, reportId);
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      const fileName = `timesheet-${values.customer.replace(/[\s.]+/g, '-')}-${format(values.date, "yyyy-MM-dd")}.csv`;
+      const fileName = `timesheet-${reportId}.csv`;
       link.setAttribute("download", fileName);
       document.body.appendChild(link);
 
@@ -129,7 +154,7 @@ export default function TimeSheetForm() {
       
       toast({
         title: "Success!",
-        description: "Your timesheet has been saved to a file.",
+        description: `Report ${reportId} has been saved to a file.`,
       });
 
     } catch (error) {
@@ -143,9 +168,10 @@ export default function TimeSheetForm() {
 
   const handleExportToEmail = (values: FormData) => {
     try {
-      const csvContent = generateCsvContent(values);
-      const subject = `Timesheet for ${values.customer} on ${format(values.date, "yyyy-MM-dd")}`;
-      const body = `Hi,\n\nPlease find the attached timesheet data.\n\n${csvContent}\n\nThanks,`;
+      const reportId = generateReportId();
+      const csvContent = generateCsvContent(values, reportId);
+      const subject = `Timesheet Report ${reportId} for ${values.customer}`;
+      const body = `Hi,\n\nPlease find the attached timesheet data (Report ID: ${reportId}).\n\n${csvContent}\n\nThanks,`;
       const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.location.href = mailtoLink;
        toast({
