@@ -68,10 +68,10 @@ const initialCustomers: Customer[] = [
 const formSchema = z.object({
   customer: z.string({
     required_error: "Please select a customer.",
-  }),
+  }).min(1, "Please select a customer."),
   project: z.string({
     required_error: "Please select a project.",
-  }),
+  }).min(1, "Please select a project."),
   date: z.date({
     required_error: "A date is required.",
   }),
@@ -125,6 +125,8 @@ export default function TimeSheetForm() {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      customer: "",
+      project: "",
       entranceTime: "10:00",
       exitTime: "15:00",
     },
