@@ -253,6 +253,10 @@ export default function TimeSheetForm() {
 
   const monthlyReportForm = useForm<z.infer<typeof monthlyReportSchema>>({
     resolver: zodResolver(monthlyReportSchema),
+    defaultValues: {
+      customer: "",
+      customerEmail: "",
+    },
   });
   
   const newCustomerForm = useForm<z.infer<typeof newCustomerSchema>>({
@@ -390,6 +394,8 @@ export default function TimeSheetForm() {
       if (customer) {
         monthlyReportForm.setValue("customerEmail", customer.email);
       }
+    } else {
+        monthlyReportForm.setValue("customerEmail", "");
     }
   }, [watchedMonthlyCustomer, customers, monthlyReportForm]);
   
@@ -1065,7 +1071,7 @@ export default function TimeSheetForm() {
                                 <FormItem>
                                     <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4 text-muted-foreground" />Customer Email</FormLabel>
                                     <FormControl>
-                                        <Input type="email" placeholder="Enter customer's email" {...field} />
+                                        <Input type="email" placeholder="Enter customer's email" {...field} value={field.value ?? ""} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
