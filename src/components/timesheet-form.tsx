@@ -823,7 +823,7 @@ export default function TimeSheetForm() {
     <Card className="w-full max-w-lg shadow-lg">
       <CardHeader className="text-center space-y-2">
         <CardTitle className="text-3xl font-headline">Orange Times</CardTitle>
-        <CardDescription>Create your CSV hours report in a few clicks.</CardDescription>
+        <CardDescription className="font-bold">Create your CSV hours report in a few clicks</CardDescription>
         <CardDescription>Optimized for Android on Samsung Galaxy 24 Plus</CardDescription>
       </CardHeader>
       <CardContent>
