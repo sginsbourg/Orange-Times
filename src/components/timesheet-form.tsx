@@ -279,8 +279,8 @@ export default function TimeSheetForm() {
 
   const calculateHours = (entrance: string, exit: string): number => {
     if (!entrance || !exit) return 0;
-    const entranceDate = new Date(`1970-01-01T${entrance}:00`);
-    const exitDate = new Date(`1970-01-01T${exit}:00`);
+    const entranceDate = new Date("1970-01-01T" + entrance + ":00");
+    const exitDate = new Date("1970-01-01T" + exit + ":00");
     if (exitDate <= entranceDate) return 0;
     const diff = exitDate.getTime() - entranceDate.getTime();
     return parseFloat((diff / (1000 * 60 * 60)).toFixed(2));
@@ -515,8 +515,8 @@ export default function TimeSheetForm() {
 
       const filteredEntries = timesheetEntries.filter(entry => 
         entry.customer === customer &&
-        entry.date.getFullYear() === reportYear &&
-        entry.date.getMonth() === reportMonth
+        new Date(entry.date).getFullYear() === reportYear &&
+        new Date(entry.date).getMonth() === reportMonth
       );
 
       if (filteredEntries.length === 0) {
@@ -534,7 +534,14 @@ export default function TimeSheetForm() {
       const companyName = customerDetails ? customerDetails.companyName : '';
 
       const subject = `Monthly Timesheet Report for ${customer} (${companyName}) - ${format(month, "MMMM yyyy")}`;
-      const body = `Hi,\n\nPlease find the monthly timesheet report for ${customer} for ${format(month, "MMMM yyyy")}.\n\nTotal Hours: ${totalHours.toFixed(2)}\n\n--- CSV Data ---\n${csvContent}\n\nThanks,`;
+      
+      const detailedEntries = filteredEntries.map(entry => {
+        const hours = calculateHours(entry.entranceTime, entry.exitTime);
+        return `- ${format(new Date(entry.date), "PPP")}: ${hours.toFixed(2)} hours on "${entry.project}"`;
+      }).join("\n");
+
+      const body = `Hi,\n\nPlease find the monthly timesheet report for ${customer} for ${format(month, "MMMM yyyy")}.\n\nTotal Hours: ${totalHours.toFixed(2)}\n\n---\n\nEntries:\n${detailedEntries}\n\n---\n\nCSV Data:\n${csvContent}\n\nThanks,`;
+      
       const mailtoLink = `mailto:${customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       
       window.location.href = mailtoLink;
@@ -1067,7 +1074,7 @@ export default function TimeSheetForm() {
                                     <TableCell className="font-medium">{entry.id}</TableCell>
                                     <TableCell>{entry.customer}</TableCell>
                                     <TableCell>{entry.project}</TableCell>
-                                    <TableCell>{format(entry.date, 'PPP')}</TableCell>
+                                    <TableCell>{format(new Date(entry.date), 'PPP')}</TableCell>
                                     <TableCell>{calculateHours(entry.entranceTime, entry.exitTime).toFixed(2)}</TableCell>
                                 </TableRow>
                             )})}
