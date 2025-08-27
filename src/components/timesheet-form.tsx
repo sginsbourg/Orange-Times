@@ -55,6 +55,17 @@ import {
   DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
@@ -440,6 +451,15 @@ export default function TimeSheetForm() {
     return newEntry;
   }
   
+  const handleDeleteEntry = (id: string) => {
+    const updatedEntries = timesheetEntries.filter(entry => entry.id !== id);
+    setTimesheetEntries(updatedEntries);
+    localStorage.setItem(TIMESHEET_ENTRIES_KEY, JSON.stringify(updatedEntries));
+    toast({
+      title: "Entry Deleted",
+      description: `Entry ${id} has been successfully deleted.`,
+    });
+  }
 
   const generateCsvContent = (values: TimesheetEntry[]) => {
     const headers = "ID,Customer,Company,Project,Date,Hours";
@@ -935,7 +955,7 @@ export default function TimeSheetForm() {
                             <FormItem>
                                 <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4 text-muted-foreground" />Customer Email</FormLabel>
                                 <FormControl>
-                                    <Input type="email" placeholder="Enter customer's email (optional)" {...field} />
+                                    <Input type="email" placeholder="Enter customer's email (optional)" {...field} value={field.value ?? ""} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -1154,6 +1174,7 @@ export default function TimeSheetForm() {
                                 <TableHead>Project</TableHead>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Hours</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1165,6 +1186,29 @@ export default function TimeSheetForm() {
                                     <TableCell>{entry.project}</TableCell>
                                     <TableCell>{format(new Date(entry.date), 'PPP')}</TableCell>
                                     <TableCell>{calculateHours(entry.entranceTime, entry.exitTime).toFixed(2)}</TableCell>
+                                    <TableCell className="text-right">
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    This action cannot be undone. This will permanently delete the timesheet entry {entry.id}.
+                                                </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => handleDeleteEntry(entry.id)}>
+                                                    Delete
+                                                </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TableCell>
                                 </TableRow>
                             )})}
                         </TableBody>
