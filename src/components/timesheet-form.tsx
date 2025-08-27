@@ -135,7 +135,7 @@ const NEW_PROJECT_FORM_STORAGE_KEY = "timesheetNewProjectFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
 const CUSTOMERS_KEY = "timesheetCustomers";
-const APP_VERSION = "0.2.2";
+const APP_VERSION = "0.2.3";
 
 const readmeContent = `# Orange Times - User Manual & Technical Specifications
 
@@ -203,7 +203,7 @@ This feature compiles all entries for a specific customer and month into a singl
 1.  Navigate to the "Monthly Report" section.
 2.  Select the **Customer** and the desired **Month**.
 3.  The customer's email address will be auto-filled if it has been saved before. You can also update it here.
-4.  Click "Email Monthly Report". This action opens your email client with a pre-filled email containing a summary, total hours in **bold**, a detailed list of all entries for the month, and the full CSV data in the body.
+4.  Click "Email Monthly Report". This action opens your email client with a pre-filled email containing a summary, total hours in **bold**, a detailed list of all entries for the month (including entry/exit times), and the full CSV data in the body.
 
 #### 1.6. Backing Up Your Data
 
@@ -577,7 +577,7 @@ export default function TimeSheetForm() {
       
       const detailedEntries = filteredEntries.map(entry => {
         const hours = calculateHours(entry.entranceTime, entry.exitTime);
-        return `- ${format(new Date(entry.date), "PPP")}: ${hours.toFixed(2)} hours on "${entry.project}"`;
+        return `- ${format(new Date(entry.date), "PPP")} (${entry.entranceTime} - ${entry.exitTime}): ${hours.toFixed(2)} hours on "${entry.project}"`;
       }).join("\n");
 
       const body = `Hi,\n\nPlease find the monthly timesheet report for ${customer} for ${format(month, "MMMM yyyy")}.\n\n**Total Hours: ${totalHours.toFixed(2)}**\n\n---\n\nEntries:\n${detailedEntries}\n\n---\n\nCSV Data:\n${csvContent}\n\nThanks,`;
