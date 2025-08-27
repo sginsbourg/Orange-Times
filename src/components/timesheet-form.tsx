@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building, ListPlus, Trash2, FileText, Loader2, RefreshCw } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building, ListPlus, Trash2, FileText, Loader2, RefreshCw, Pencil, UserX } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -54,6 +54,8 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogDescription,
+  DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog"
 import {
   AlertDialog,
@@ -112,10 +114,10 @@ const monthlyReportSchema = z.object({
     customerEmail: z.string().email("Please enter a valid email.").optional().or(z.literal('')),
 });
 
-const newCustomerSchema = z.object({
-    newCustomerName: z.string().min(1, "Customer name is required."),
-    newCustomerEmail: z.string().email("Please enter a valid email.").optional().or(z.literal('')),
-    newCustomerCompanyName: z.string().min(1, "Company name is required."),
+const customerFormSchema = z.object({
+    name: z.string().min(1, "Customer name is required."),
+    email: z.string().email("Please enter a valid email.").optional().or(z.literal('')),
+    companyName: z.string().min(1, "Company name is required."),
 });
 
 const newProjectSchema = z.object({
@@ -129,7 +131,6 @@ type TimesheetEntry = FormData & { id: string };
 
 const DAILY_FORM_STORAGE_KEY = "timesheetFormData";
 const MONTHLY_FORM_STORAGE_KEY = "timesheetMonthlyFormData";
-const NEW_CUSTOMER_FORM_STORAGE_KEY = "timesheetNewCustomerFormData";
 const NEW_PROJECT_FORM_STORAGE_KEY = "timesheetNewProjectFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
@@ -251,6 +252,8 @@ export default function TimeSheetForm() {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
   const [isSyncingCustomers, setIsSyncingCustomers] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -270,12 +273,12 @@ export default function TimeSheetForm() {
     },
   });
   
-  const newCustomerForm = useForm<z.infer<typeof newCustomerSchema>>({
-    resolver: zodResolver(newCustomerSchema),
+  const customerForm = useForm<z.infer<typeof customerFormSchema>>({
+    resolver: zodResolver(customerFormSchema),
     defaultValues: {
-      newCustomerName: "",
-      newCustomerEmail: "",
-      newCustomerCompanyName: "",
+      name: "",
+      email: "",
+      companyName: "",
     },
   });
 
@@ -290,7 +293,6 @@ export default function TimeSheetForm() {
 
   const watchedDailyForm = form.watch();
   const watchedMonthlyForm = monthlyReportForm.watch();
-  const watchedNewCustomerForm = newCustomerForm.watch();
   const watchedNewProjectForm = newProjectForm.watch();
   const watchedDailyCustomer = form.watch("customer");
   const watchedMonthlyCustomer = monthlyReportForm.watch("customer");
@@ -325,11 +327,6 @@ export default function TimeSheetForm() {
           month: parsedData.month ? new Date(parsedData.month) : new Date(),
         };
         monthlyReportForm.reset(validatedData);
-      }
-
-      const savedNewCustomerData = localStorage.getItem(NEW_CUSTOMER_FORM_STORAGE_KEY);
-      if (savedNewCustomerData) {
-        newCustomerForm.reset(JSON.parse(savedNewCustomerData));
       }
       
       const savedNewProjectData = localStorage.getItem(NEW_PROJECT_FORM_STORAGE_KEY);
@@ -378,16 +375,6 @@ export default function TimeSheetForm() {
   useEffect(() => {
     if (isMounted) {
       try {
-        localStorage.setItem(NEW_CUSTOMER_FORM_STORAGE_KEY, JSON.stringify(watchedNewCustomerForm));
-      } catch (error) {
-        console.error("Failed to save new customer form data to localStorage", error);
-      }
-    }
-  }, [watchedNewCustomerForm, isMounted]);
-  
-  useEffect(() => {
-    if (isMounted) {
-      try {
         localStorage.setItem(NEW_PROJECT_FORM_STORAGE_KEY, JSON.stringify(watchedNewProjectForm));
       } catch (error) {
         console.error("Failed to save new project form data to localStorage", error);
@@ -413,6 +400,18 @@ export default function TimeSheetForm() {
   useEffect(() => {
     form.setValue("project", "");
   }, [watchedDailyCustomer, form]);
+
+  useEffect(() => {
+    if (editingCustomer) {
+      customerForm.reset({
+        name: editingCustomer.name,
+        email: editingCustomer.email,
+        companyName: editingCustomer.companyName,
+      });
+    } else {
+      customerForm.reset({ name: "", email: "", companyName: "" });
+    }
+  }, [editingCustomer, customerForm]);
 
   
   const generateReportId = (): string => {
@@ -628,52 +627,104 @@ export default function TimeSheetForm() {
     }
   };
 
-  const handleAddNewCustomer = async (values: z.infer<typeof newCustomerSchema>) => {
-    if (customers.some(c => c.name.toLowerCase() === values.newCustomerName.toLowerCase())) {
-        toast({
-            title: "Customer Exists",
-            description: "A customer with this name already exists.",
-            variant: "destructive",
-        });
-        return;
-    }
-
+  const handleCustomerFormSubmit = async (values: z.infer<typeof customerFormSchema>) => {
     setIsAddingCustomer(true);
     try {
+      const isEditing = !!editingCustomer;
+      // Check for duplicate name, excluding the current customer being edited
+      if (customers.some(c => c.name.toLowerCase() === values.name.toLowerCase() && c.name !== editingCustomer?.name)) {
+        toast({
+          title: "Customer Exists",
+          description: "A customer with this name already exists.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const customerData: AddCustomerInput = {
-        name: values.newCustomerName,
-        email: values.newCustomerEmail || "",
-        companyName: values.newCustomerCompanyName,
+        name: values.name,
+        email: values.email || "",
+        companyName: values.companyName,
       };
 
-      const result = await addCustomer(customerData);
-
-      if (result.success) {
+      // We are not awaiting the result to make the UI feel faster.
+      // Error handling for the server-side operation can be done via toasts or other notifications.
+      addCustomer(customerData).then(result => {
+        if (!result.success) {
+          console.error("Failed to sync customer to server:", result.error);
+          toast({
+            title: "Server Sync Failed",
+            description: `Could not sync ${customerData.name} with the server.`,
+            variant: "destructive"
+          })
+        }
+      });
+      
+      let updatedCustomers;
+      if (isEditing) {
+        // Handle cascading name change
+        const oldName = editingCustomer!.name;
+        if (oldName !== values.name) {
+          const updatedEntries = timesheetEntries.map(entry => 
+            entry.customer === oldName ? { ...entry, customer: values.name } : entry
+          );
+          setTimesheetEntries(updatedEntries);
+          localStorage.setItem(TIMESHEET_ENTRIES_KEY, JSON.stringify(updatedEntries));
+        }
+        
+        updatedCustomers = customers.map(c => 
+          c.name === editingCustomer!.name ? { ...c, ...values } : c
+        );
+        toast({
+            title: "Customer Updated",
+            description: `Successfully updated ${values.name}.`,
+        });
+      } else {
         const newCustomer: Customer = {
           ...customerData,
           projects: [],
         };
-        const updatedCustomers = [...customers, newCustomer];
-        setCustomers(updatedCustomers);
-        localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
+        updatedCustomers = [...customers, newCustomer];
         toast({
             title: "Customer Added",
             description: `Successfully added ${newCustomer.name}.`,
         });
-        newCustomerForm.reset();
-      } else {
-        throw new Error(result.error || "Failed to add customer on the server.");
       }
+      
+      setCustomers(updatedCustomers);
+      localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
+      
+      customerForm.reset();
+      setEditingCustomer(null);
+      setIsCustomerDialogOpen(false);
+
     } catch (error: any) {
         toast({
-            title: "Server Error",
-            description: error.message || "Something went wrong while adding the customer.",
+            title: isEditing ? "Error Updating Customer" : "Error Adding Customer",
+            description: error.message || "Something went wrong.",
             variant: "destructive",
         });
     } finally {
       setIsAddingCustomer(false);
     }
   };
+
+  const handleDeleteCustomer = (customerName: string) => {
+    const updatedCustomers = customers.filter(c => c.name !== customerName);
+    const updatedEntries = timesheetEntries.filter(e => e.customer !== customerName);
+
+    setCustomers(updatedCustomers);
+    setTimesheetEntries(updatedEntries);
+
+    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
+    localStorage.setItem(TIMESHEET_ENTRIES_KEY, JSON.stringify(updatedEntries));
+
+    toast({
+      title: "Customer Deleted",
+      description: `Customer "${customerName}" and all their associated entries have been deleted.`,
+    });
+  };
+
 
   const handleSyncCustomers = async () => {
     setIsSyncingCustomers(true);
@@ -761,6 +812,11 @@ export default function TimeSheetForm() {
         description: `Successfully removed "${projectName}" from ${customerName}.`,
     });
   }
+
+  const openCustomerDialog = (customer: Customer | null) => {
+    setEditingCustomer(customer);
+    setIsCustomerDialogOpen(true);
+  };
 
 
   return (
@@ -919,68 +975,56 @@ export default function TimeSheetForm() {
       <Separator className="my-4" />
        <CardContent>
         <div className="space-y-4">
-            <h3 className="text-xl font-semibold text-center flex items-center justify-center"><UserPlus className="mr-2 h-5 w-5" />Add New Customer</h3>
-             <Form {...newCustomerForm}>
-                <form onSubmit={newCustomerForm.handleSubmit(handleAddNewCustomer)} className="space-y-4">
-                    <FormField
-                        control={newCustomerForm.control}
-                        name="newCustomerName"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Customer Name</FormLabel>
-                                <FormControl>
-                                    <Input placeholder="Enter customer's full name" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={newCustomerForm.control}
-                        name="newCustomerCompanyName"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="flex items-center"><Building className="mr-2 h-4 w-4 text-muted-foreground" />Company Name</FormLabel>
-                                <FormControl>
-                                    <Input placeholder="Enter company's name" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={newCustomerForm.control}
-                        name="newCustomerEmail"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4 text-muted-foreground" />Customer Email</FormLabel>
-                                <FormControl>
-                                    <Input type="email" placeholder="Enter customer's email (optional)" {...field} value={field.value ?? ""} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <Button type="submit" className="w-full" disabled={isAddingCustomer || isSyncingCustomers}>
-                          {isAddingCustomer ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                              <UserPlus className="mr-2 h-4 w-4" />
-                          )}
-                          Add Customer
-                      </Button>
-                      <Button type="button" variant="outline" className="w-full" onClick={handleSyncCustomers} disabled={isAddingCustomer || isSyncingCustomers}>
-                          {isSyncingCustomers ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                              <RefreshCw className="mr-2 h-4 w-4" />
-                          )}
-                          Sync Customers
-                      </Button>
-                    </div>
-                </form>
-            </Form>
+            <h3 className="text-xl font-semibold text-center flex items-center justify-center"><Users className="mr-2 h-5 w-5" />Manage Customers</h3>
+            <div className="space-y-2">
+              {customers.map(customer => (
+                <div key={customer.name} className="flex items-center justify-between p-2 border rounded-md">
+                  <div>
+                    <p className="font-semibold">{customer.name} <span className="text-muted-foreground">({customer.companyName})</span></p>
+                    <p className="text-sm text-muted-foreground">{customer.email}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => openCustomerDialog(customer)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                          <UserX className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                          <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                              This action cannot be undone. This will permanently delete the customer "{customer.name}" and all associated timesheet entries.
+                          </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDeleteCustomer(customer.name)}>
+                              Delete
+                          </AlertDialogAction>
+                          </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button onClick={() => openCustomerDialog(null)} className="w-full">
+                <UserPlus className="mr-2 h-4 w-4" /> Add New Customer
+              </Button>
+              <Button type="button" variant="outline" className="w-full" onClick={handleSyncCustomers} disabled={isAddingCustomer || isSyncingCustomers}>
+                  {isSyncingCustomers ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Sync Customers
+              </Button>
+            </div>
         </div>
       </CardContent>
       <Separator className="my-4" />
@@ -1252,6 +1296,65 @@ export default function TimeSheetForm() {
         <CardFooter className="justify-center text-xs text-muted-foreground pt-6">
             Version 0.1.0
         </CardFooter>
+      <Dialog open={isCustomerDialogOpen} onOpenChange={setIsCustomerDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingCustomer ? "Edit Customer" : "Add New Customer"}</DialogTitle>
+          </DialogHeader>
+          <Form {...customerForm}>
+            <form onSubmit={customerForm.handleSubmit(handleCustomerFormSubmit)} className="space-y-4">
+              <FormField
+                control={customerForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Customer Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter customer's full name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={customerForm.control}
+                name="companyName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><Building className="mr-2 h-4 w-4 text-muted-foreground" />Company Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter company's name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={customerForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4 text-muted-foreground" />Customer Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="Enter customer's email (optional)" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button type="submit" disabled={isAddingCustomer}>
+                  {isAddingCustomer ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  {editingCustomer ? "Save Changes" : "Add Customer"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
