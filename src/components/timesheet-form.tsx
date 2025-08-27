@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -53,14 +53,15 @@ import { Separator } from "@/components/ui/separator"
 type Customer = {
   name: string;
   email: string;
+  companyName: string;
 };
 
 const initialCustomers: Customer[] = [
-  { name: "Innovate Inc.", email: "" },
-  { name: "Quantum Solutions", email: "" },
-  { name: "Stellar Corp.", email: "" },
-  { name: "Apex Industries", email: "" },
-  { name: "Nexus Global", email: "" },
+  { name: "Alice Johnson", email: "", companyName: "Innovate Inc." },
+  { name: "Bob Williams", email: "", companyName: "Quantum Solutions" },
+  { name: "Charlie Brown", email: "", companyName: "Stellar Corp." },
+  { name: "Diana Miller", email: "", companyName: "Apex Industries" },
+  { name: "Ethan Davis", email: "", companyName: "Nexus Global" },
 ];
 
 const formSchema = z.object({
@@ -89,6 +90,7 @@ const monthlyReportSchema = z.object({
 const newCustomerSchema = z.object({
     newCustomerName: z.string().min(1, "Customer name is required."),
     newCustomerEmail: z.string().email("Please enter a valid email.").optional().or(z.literal('')),
+    newCustomerCompanyName: z.string().min(1, "Company name is required."),
 });
 
 
@@ -127,6 +129,7 @@ export default function TimeSheetForm() {
     defaultValues: {
       newCustomerName: "",
       newCustomerEmail: "",
+      newCustomerCompanyName: "",
     },
   });
 
@@ -273,10 +276,12 @@ export default function TimeSheetForm() {
   
 
   const generateCsvContent = (values: TimesheetEntry[]) => {
-    const headers = "ID,Customer,Date,Hours";
+    const headers = "ID,Customer,Company,Date,Hours";
     const rows = values.map(entry => {
         const hours = calculateHours(entry.entranceTime, entry.exitTime);
-        return `"${entry.id}","${entry.customer}","${format(entry.date, "yyyy-MM-dd")}","${hours}"`;
+        const customerDetails = customers.find(c => c.name === entry.customer);
+        const companyName = customerDetails ? customerDetails.companyName : '';
+        return `"${entry.id}","${entry.customer}","${companyName}","${format(entry.date, "yyyy-MM-dd")}","${hours}"`;
     });
     return `${headers}\n${rows.join("\n")}`;
   }
@@ -363,8 +368,10 @@ export default function TimeSheetForm() {
 
       const csvContent = generateCsvContent(filteredEntries);
       const totalHours = filteredEntries.reduce((acc, entry) => acc + calculateHours(entry.entranceTime, entry.exitTime), 0);
+      const customerDetails = customers.find(c => c.name === customer);
+      const companyName = customerDetails ? customerDetails.companyName : '';
 
-      const subject = `Monthly Timesheet Report for ${customer} - ${format(month, "MMMM yyyy")}`;
+      const subject = `Monthly Timesheet Report for ${customer} (${companyName}) - ${format(month, "MMMM yyyy")}`;
       const body = `Hi,\n\nPlease find the monthly timesheet report for ${customer} for ${format(month, "MMMM yyyy")}.\n\nTotal Hours: ${totalHours.toFixed(2)}\n\n--- CSV Data ---\n${csvContent}\n\nThanks,`;
       const mailtoLink = `mailto:${customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       
@@ -427,6 +434,7 @@ export default function TimeSheetForm() {
     const newCustomer: Customer = {
         name: values.newCustomerName,
         email: values.newCustomerEmail || "",
+        companyName: values.newCustomerCompanyName,
     };
     if (customers.some(c => c.name.toLowerCase() === newCustomer.name.toLowerCase())) {
         toast({
@@ -471,7 +479,7 @@ export default function TimeSheetForm() {
                     <SelectContent>
                       {customers.map((customer) => (
                         <SelectItem key={customer.name} value={customer.name}>
-                          {customer.name}
+                          {customer.name} ({customer.companyName})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -594,6 +602,19 @@ export default function TimeSheetForm() {
                     />
                     <FormField
                         control={newCustomerForm.control}
+                        name="newCustomerCompanyName"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center"><Building className="mr-2 h-4 w-4 text-muted-foreground" />Company Name</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="Enter company's name" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={newCustomerForm.control}
                         name="newCustomerEmail"
                         render={({ field }) => (
                             <FormItem>
@@ -634,7 +655,7 @@ export default function TimeSheetForm() {
                                     <SelectContent>
                                     {customers.map((customer) => (
                                         <SelectItem key={customer.name} value={customer.name}>
-                                        {customer.name}
+                                          {customer.name} ({customer.companyName})
                                         </SelectItem>
                                     ))}
                                     </SelectContent>
@@ -731,19 +752,24 @@ export default function TimeSheetForm() {
                             <TableRow>
                                 <TableHead>ID</TableHead>
                                 <TableHead>Customer</TableHead>
+                                <TableHead>Company</TableHead>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Hours</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {timesheetEntries.map((entry) => (
+                            {timesheetEntries.map((entry) => {
+                                const customerDetails = customers.find(c => c.name === entry.customer);
+                                const companyName = customerDetails ? customerDetails.companyName : '';
+                                return (
                                 <TableRow key={entry.id}>
                                     <TableCell className="font-medium">{entry.id}</TableCell>
                                     <TableCell>{entry.customer}</TableCell>
+                                    <TableCell>{companyName}</TableCell>
                                     <TableCell>{format(entry.date, 'PPP')}</TableCell>
                                     <TableCell>{calculateHours(entry.entranceTime, entry.exitTime).toFixed(2)}</TableCell>
                                 </TableRow>
-                            ))}
+                            )})}
                         </TableBody>
                     </Table>
                 ) : (
