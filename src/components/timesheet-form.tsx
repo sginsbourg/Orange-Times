@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building, ListPlus, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -35,7 +35,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -49,24 +48,29 @@ import {
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
 
 type Customer = {
   name: string;
   email: string;
   companyName: string;
+  projects: string[];
 };
 
 const initialCustomers: Customer[] = [
-  { name: "Alice Johnson", email: "", companyName: "Innovate Inc." },
-  { name: "Bob Williams", email: "", companyName: "Quantum Solutions" },
-  { name: "Charlie Brown", email: "", companyName: "Stellar Corp." },
-  { name: "Diana Miller", email: "", companyName: "Apex Industries" },
-  { name: "Ethan Davis", email: "", companyName: "Nexus Global" },
+  { name: "Alice Johnson", email: "", companyName: "Innovate Inc.", projects: ["Project Alpha", "Project Beta"] },
+  { name: "Bob Williams", email: "", companyName: "Quantum Solutions", projects: ["Project Gamma"] },
+  { name: "Charlie Brown", email: "", companyName: "Stellar Corp.", projects: [] },
+  { name: "Diana Miller", email: "", companyName: "Apex Industries", projects: ["Project Delta", "Project Epsilon", "Project Zeta"] },
+  { name: "Ethan Davis", email: "", companyName: "Nexus Global", projects: [] },
 ];
 
 const formSchema = z.object({
   customer: z.string({
     required_error: "Please select a customer.",
+  }),
+  project: z.string({
+    required_error: "Please select a project.",
   }),
   date: z.date({
     required_error: "A date is required.",
@@ -93,6 +97,11 @@ const newCustomerSchema = z.object({
     newCustomerCompanyName: z.string().min(1, "Company name is required."),
 });
 
+const newProjectSchema = z.object({
+  customerForProject: z.string().min(1, "Please select a customer."),
+  newProjectName: z.string().min(1, "Project name is required."),
+});
+
 
 type FormData = z.infer<typeof formSchema>;
 type TimesheetEntry = FormData & { id: string };
@@ -100,6 +109,7 @@ type TimesheetEntry = FormData & { id: string };
 const DAILY_FORM_STORAGE_KEY = "timesheetFormData";
 const MONTHLY_FORM_STORAGE_KEY = "timesheetMonthlyFormData";
 const NEW_CUSTOMER_FORM_STORAGE_KEY = "timesheetNewCustomerFormData";
+const NEW_PROJECT_FORM_STORAGE_KEY = "timesheetNewProjectFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
 const CUSTOMERS_KEY = "timesheetCustomers";
@@ -133,10 +143,20 @@ export default function TimeSheetForm() {
     },
   });
 
+  const newProjectForm = useForm<z.infer<typeof newProjectSchema>>({
+    resolver: zodResolver(newProjectSchema),
+    defaultValues: {
+      customerForProject: "",
+      newProjectName: "",
+    },
+  });
+
 
   const watchedDailyForm = form.watch();
   const watchedMonthlyForm = monthlyReportForm.watch();
   const watchedNewCustomerForm = newCustomerForm.watch();
+  const watchedNewProjectForm = newProjectForm.watch();
+  const watchedDailyCustomer = form.watch("customer");
   const watchedMonthlyCustomer = monthlyReportForm.watch("customer");
 
   const calculateHours = (entrance: string, exit: string): number => {
@@ -174,6 +194,11 @@ export default function TimeSheetForm() {
       const savedNewCustomerData = localStorage.getItem(NEW_CUSTOMER_FORM_STORAGE_KEY);
       if (savedNewCustomerData) {
         newCustomerForm.reset(JSON.parse(savedNewCustomerData));
+      }
+      
+      const savedNewProjectData = localStorage.getItem(NEW_PROJECT_FORM_STORAGE_KEY);
+      if (savedNewProjectData) {
+        newProjectForm.reset(JSON.parse(savedNewProjectData));
       }
 
       const savedEntries = localStorage.getItem(TIMESHEET_ENTRIES_KEY);
@@ -223,6 +248,16 @@ export default function TimeSheetForm() {
       }
     }
   }, [watchedNewCustomerForm, isMounted]);
+  
+  useEffect(() => {
+    if (isMounted) {
+      try {
+        localStorage.setItem(NEW_PROJECT_FORM_STORAGE_KEY, JSON.stringify(watchedNewProjectForm));
+      } catch (error) {
+        console.error("Failed to save new project form data to localStorage", error);
+      }
+    }
+  }, [watchedNewProjectForm, isMounted]);
 
   useEffect(() => {
      setCalculatedHours(calculateHours(watchedDailyForm.entranceTime, watchedDailyForm.exitTime));
@@ -236,6 +271,10 @@ export default function TimeSheetForm() {
       }
     }
   }, [watchedMonthlyCustomer, customers, monthlyReportForm]);
+  
+  useEffect(() => {
+    form.setValue("project", "");
+  }, [watchedDailyCustomer, form]);
 
   
   const generateReportId = (): string => {
@@ -276,12 +315,12 @@ export default function TimeSheetForm() {
   
 
   const generateCsvContent = (values: TimesheetEntry[]) => {
-    const headers = "ID,Customer,Company,Date,Hours";
+    const headers = "ID,Customer,Company,Project,Date,Hours";
     const rows = values.map(entry => {
         const hours = calculateHours(entry.entranceTime, entry.exitTime);
         const customerDetails = customers.find(c => c.name === entry.customer);
         const companyName = customerDetails ? customerDetails.companyName : '';
-        return `"${entry.id}","${entry.customer}","${companyName}","${format(entry.date, "yyyy-MM-dd")}","${hours}"`;
+        return `"${entry.id}","${entry.customer}","${companyName}","${entry.project}","${format(entry.date, "yyyy-MM-dd")}","${hours}"`;
     });
     return `${headers}\n${rows.join("\n")}`;
   }
@@ -435,6 +474,7 @@ export default function TimeSheetForm() {
         name: values.newCustomerName,
         email: values.newCustomerEmail || "",
         companyName: values.newCustomerCompanyName,
+        projects: [],
     };
     if (customers.some(c => c.name.toLowerCase() === newCustomer.name.toLowerCase())) {
         toast({
@@ -453,6 +493,49 @@ export default function TimeSheetForm() {
     });
     newCustomerForm.reset();
   };
+
+  const handleAddNewProject = (values: z.infer<typeof newProjectSchema>) => {
+    const { customerForProject, newProjectName } = values;
+    const updatedCustomers = customers.map(c => {
+        if (c.name === customerForProject) {
+            if (c.projects.some(p => p.toLowerCase() === newProjectName.toLowerCase())) {
+                toast({
+                    title: "Project Exists",
+                    description: `Project "${newProjectName}" already exists for ${customerForProject}.`,
+                    variant: "destructive",
+                });
+                return c;
+            }
+            return { ...c, projects: [...c.projects, newProjectName] };
+        }
+        return c;
+    });
+
+    if (JSON.stringify(updatedCustomers) !== JSON.stringify(customers)) {
+        setCustomers(updatedCustomers);
+        localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
+        toast({
+            title: "Project Added",
+            description: `Successfully added "${newProjectName}" to ${customerForProject}.`,
+        });
+        newProjectForm.reset();
+    }
+  };
+
+  const handleRemoveProject = (customerName: string, projectName: string) => {
+    const updatedCustomers = customers.map(c => {
+        if (c.name === customerName) {
+            return { ...c, projects: c.projects.filter(p => p !== projectName) };
+        }
+        return c;
+    });
+    setCustomers(updatedCustomers);
+    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
+    toast({
+        title: "Project Removed",
+        description: `Successfully removed "${projectName}" from ${customerName}.`,
+    });
+  }
 
 
   return (
@@ -488,6 +571,32 @@ export default function TimeSheetForm() {
                 </FormItem>
               )}
             />
+            {watchedDailyCustomer && (
+              <FormField
+                control={form.control}
+                name="project"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><ListPlus className="mr-2 h-4 w-4 text-muted-foreground" />Project</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a project" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {customers.find(c => c.name === watchedDailyCustomer)?.projects.map((project) => (
+                          <SelectItem key={project} value={project}>
+                            {project}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="date"
@@ -637,6 +746,76 @@ export default function TimeSheetForm() {
       <Separator className="my-4" />
       <CardContent>
         <div className="space-y-4">
+            <h3 className="text-xl font-semibold text-center flex items-center justify-center"><ListPlus className="mr-2 h-5 w-5" />Manage Projects</h3>
+             <Form {...newProjectForm}>
+                <form onSubmit={newProjectForm.handleSubmit(handleAddNewProject)} className="space-y-4">
+                    <FormField
+                        control={newProjectForm.control}
+                        name="customerForProject"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Customer</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                                    <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a customer" />
+                                    </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                    {customers.map((customer) => (
+                                        <SelectItem key={customer.name} value={customer.name}>
+                                          {customer.name} ({customer.companyName})
+                                        </SelectItem>
+                                    ))}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                     <FormField
+                        control={newProjectForm.control}
+                        name="newProjectName"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center"><Book className="mr-2 h-4 w-4 text-muted-foreground" />New Project Name</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="Enter project name" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <Button type="submit" className="w-full">
+                        <ListPlus className="mr-2 h-4 w-4" />
+                        Add Project
+                    </Button>
+                </form>
+            </Form>
+            <div className="space-y-2">
+                {customers.map(customer => (
+                    customer.projects.length > 0 && (
+                        <div key={customer.name}>
+                            <h4 className="font-semibold">{customer.name}'s Projects:</h4>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                                {customer.projects.map(project => (
+                                    <Badge key={project} variant="secondary" className="flex items-center gap-1">
+                                        {project}
+                                        <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleRemoveProject(customer.name, project)}>
+                                            <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                    </Badge>
+                                ))}
+                            </div>
+                        </div>
+                    )
+                ))}
+            </div>
+        </div>
+      </CardContent>
+      <Separator className="my-4" />
+      <CardContent>
+        <div className="space-y-4">
             <h3 className="text-xl font-semibold text-center flex items-center justify-center"><Book className="mr-2 h-5 w-5" />Monthly Report</h3>
              <Form {...monthlyReportForm}>
                 <form onSubmit={monthlyReportForm.handleSubmit(handleMonthlyReport)} className="space-y-4">
@@ -752,20 +931,18 @@ export default function TimeSheetForm() {
                             <TableRow>
                                 <TableHead>ID</TableHead>
                                 <TableHead>Customer</TableHead>
-                                <TableHead>Company</TableHead>
+                                <TableHead>Project</TableHead>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Hours</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {timesheetEntries.map((entry) => {
-                                const customerDetails = customers.find(c => c.name === entry.customer);
-                                const companyName = customerDetails ? customerDetails.companyName : '';
                                 return (
                                 <TableRow key={entry.id}>
                                     <TableCell className="font-medium">{entry.id}</TableCell>
                                     <TableCell>{entry.customer}</TableCell>
-                                    <TableCell>{companyName}</TableCell>
+                                    <TableCell>{entry.project}</TableCell>
                                     <TableCell>{format(entry.date, 'PPP')}</TableCell>
                                     <TableCell>{calculateHours(entry.entranceTime, entry.exitTime).toFixed(2)}</TableCell>
                                 </TableRow>
@@ -780,3 +957,5 @@ export default function TimeSheetForm() {
     </Card>
   )
 }
+
+    
