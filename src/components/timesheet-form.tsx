@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building, ListPlus, Trash2, FileText } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive, UserPlus, ClipboardList, Building, ListPlus, Trash2, FileText, Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -58,6 +58,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { addCustomer, AddCustomerInput } from "@/ai/flows/add-customer-flow"
 
 type Customer = {
   name: string;
@@ -237,6 +238,7 @@ export default function TimeSheetForm() {
   const [calculatedHours, setCalculatedHours] = useState<number>(0);
   const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [isAddingCustomer, setIsAddingCustomer] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -599,14 +601,8 @@ export default function TimeSheetForm() {
     }
   };
 
-  const handleAddNewCustomer = (values: z.infer<typeof newCustomerSchema>) => {
-    const newCustomer: Customer = {
-        name: values.newCustomerName,
-        email: values.newCustomerEmail || "",
-        companyName: values.newCustomerCompanyName,
-        projects: [],
-    };
-    if (customers.some(c => c.name.toLowerCase() === newCustomer.name.toLowerCase())) {
+  const handleAddNewCustomer = async (values: z.infer<typeof newCustomerSchema>) => {
+    if (customers.some(c => c.name.toLowerCase() === values.newCustomerName.toLowerCase())) {
         toast({
             title: "Customer Exists",
             description: "A customer with this name already exists.",
@@ -614,14 +610,42 @@ export default function TimeSheetForm() {
         });
         return;
     }
-    const updatedCustomers = [...customers, newCustomer];
-    setCustomers(updatedCustomers);
-    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
-    toast({
-        title: "Customer Added",
-        description: `Successfully added ${newCustomer.name}.`,
-    });
-    newCustomerForm.reset();
+
+    setIsAddingCustomer(true);
+    try {
+      const customerData: AddCustomerInput = {
+        name: values.newCustomerName,
+        email: values.newCustomerEmail || "",
+        companyName: values.newCustomerCompanyName,
+      };
+
+      const result = await addCustomer(customerData);
+
+      if (result.success) {
+        const newCustomer: Customer = {
+          ...customerData,
+          projects: [],
+        };
+        const updatedCustomers = [...customers, newCustomer];
+        setCustomers(updatedCustomers);
+        localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
+        toast({
+            title: "Customer Added",
+            description: `Successfully added ${newCustomer.name}.`,
+        });
+        newCustomerForm.reset();
+      } else {
+        throw new Error(result.error || "Failed to add customer on the server.");
+      }
+    } catch (error: any) {
+        toast({
+            title: "Server Error",
+            description: error.message || "Something went wrong while adding the customer.",
+            variant: "destructive",
+        });
+    } finally {
+      setIsAddingCustomer(false);
+    }
   };
 
   const handleAddNewProject = (values: z.infer<typeof newProjectSchema>) => {
@@ -866,8 +890,12 @@ export default function TimeSheetForm() {
                             </FormItem>
                         )}
                     />
-                    <Button type="submit" className="w-full">
-                        <UserPlus className="mr-2 h-4 w-4" />
+                    <Button type="submit" className="w-full" disabled={isAddingCustomer}>
+                        {isAddingCustomer ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <UserPlus className="mr-2 h-4 w-4" />
+                        )}
                         Add Customer
                     </Button>
                 </form>
