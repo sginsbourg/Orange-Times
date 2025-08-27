@@ -1,3 +1,4 @@
+
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -135,7 +136,7 @@ const NEW_PROJECT_FORM_STORAGE_KEY = "timesheetNewProjectFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
 const CUSTOMERS_KEY = "timesheetCustomers";
-const APP_VERSION = "0.2.4";
+const APP_VERSION = "0.2.6";
 
 const readmeContent = `# Orange Times - User Manual & Technical Specifications
 
@@ -395,6 +396,26 @@ export default function TimeSheetForm() {
   }, [watchedNewProjectForm, isMounted]);
 
   useEffect(() => {
+    if (isMounted) {
+      try {
+        localStorage.setItem(TIMESHEET_ENTRIES_KEY, JSON.stringify(timesheetEntries));
+      } catch (error) {
+        console.error("Failed to save entries to localStorage", error);
+      }
+    }
+  }, [timesheetEntries, isMounted]);
+
+  useEffect(() => {
+    if (isMounted) {
+      try {
+        localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers));
+      } catch (error) {
+        console.error("Failed to save customers to localStorage", error);
+      }
+    }
+  }, [customers, isMounted]);
+
+  useEffect(() => {
      setCalculatedHours(calculateHours(watchedDailyForm.entranceTime, watchedDailyForm.exitTime));
   }, [watchedDailyForm.entranceTime, watchedDailyForm.exitTime]);
 
@@ -452,20 +473,12 @@ export default function TimeSheetForm() {
   const addTimesheetEntry = (entry: FormData) => {
     const reportId = generateReportId();
     const newEntry: TimesheetEntry = { ...entry, id: reportId };
-    const updatedEntries = [...timesheetEntries, newEntry];
-    setTimesheetEntries(updatedEntries);
-    try {
-        localStorage.setItem(TIMESHEET_ENTRIES_KEY, JSON.stringify(updatedEntries));
-    } catch (error) {
-        console.error("Failed to save entries to localStorage", error);
-    }
+    setTimesheetEntries(prevEntries => [...prevEntries, newEntry]);
     return newEntry;
   }
   
   const handleDeleteEntry = (id: string) => {
-    const updatedEntries = timesheetEntries.filter(entry => entry.id !== id);
-    setTimesheetEntries(updatedEntries);
-    localStorage.setItem(TIMESHEET_ENTRIES_KEY, JSON.stringify(updatedEntries));
+    setTimesheetEntries(prevEntries => prevEntries.filter(entry => entry.id !== id));
     toast({
       title: "Entry Deleted",
       description: `Entry ${id} has been successfully deleted.`,
@@ -547,8 +560,6 @@ export default function TimeSheetForm() {
         c.name === customer ? { ...c, email: customerEmail || "" } : c
       );
       setCustomers(updatedCustomers);
-      localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
-
 
       const reportYear = month.getFullYear();
       const reportMonth = month.getMonth();
@@ -672,21 +683,18 @@ export default function TimeSheetForm() {
         }
       });
       
-      let updatedCustomers;
       if (isEditing) {
         // Handle cascading name change
         const oldName = editingCustomer!.name;
         if (oldName !== values.name) {
-          const updatedEntries = timesheetEntries.map(entry => 
+          setTimesheetEntries(prevEntries => prevEntries.map(entry => 
             entry.customer === oldName ? { ...entry, customer: values.name } : entry
-          );
-          setTimesheetEntries(updatedEntries);
-          localStorage.setItem(TIMESHEET_ENTRIES_KEY, JSON.stringify(updatedEntries));
+          ));
         }
         
-        updatedCustomers = customers.map(c => 
+        setCustomers(prevCustomers => prevCustomers.map(c => 
           c.name === editingCustomer!.name ? { ...c, ...values } : c
-        );
+        ));
         toast({
             title: "Customer Updated",
             description: `Successfully updated ${values.name}.`,
@@ -696,15 +704,12 @@ export default function TimeSheetForm() {
           ...customerData,
           projects: [],
         };
-        updatedCustomers = [...customers, newCustomer];
+        setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
         toast({
             title: "Customer Added",
             description: `Successfully added ${newCustomer.name}.`,
         });
       }
-      
-      setCustomers(updatedCustomers);
-      localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
       
       customerForm.reset();
       setEditingCustomer(null);
@@ -722,14 +727,8 @@ export default function TimeSheetForm() {
   };
 
   const handleDeleteCustomer = (customerName: string) => {
-    const updatedCustomers = customers.filter(c => c.name !== customerName);
-    const updatedEntries = timesheetEntries.filter(e => e.customer !== customerName);
-
-    setCustomers(updatedCustomers);
-    setTimesheetEntries(updatedEntries);
-
-    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
-    localStorage.setItem(TIMESHEET_ENTRIES_KEY, JSON.stringify(updatedEntries));
+    setCustomers(prevCustomers => prevCustomers.filter(c => c.name !== customerName));
+    setTimesheetEntries(prevEntries => prevEntries.filter(e => e.customer !== customerName));
 
     toast({
       title: "Customer Deleted",
@@ -784,8 +783,10 @@ export default function TimeSheetForm() {
 
   const handleAddNewProject = (values: z.infer<typeof newProjectSchema>) => {
     const { customerForProject, newProjectName } = values;
+    let customerExists = false;
     const updatedCustomers = customers.map(c => {
         if (c.name === customerForProject) {
+            customerExists = true;
             if (c.projects.some(p => p.toLowerCase() === newProjectName.toLowerCase())) {
                 toast({
                     title: "Project Exists",
@@ -799,9 +800,8 @@ export default function TimeSheetForm() {
         return c;
     });
 
-    if (JSON.stringify(updatedCustomers) !== JSON.stringify(customers)) {
+    if (customerExists && JSON.stringify(updatedCustomers) !== JSON.stringify(customers)) {
         setCustomers(updatedCustomers);
-        localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
         toast({
             title: "Project Added",
             description: `Successfully added "${newProjectName}" to ${customerForProject}.`,
@@ -811,14 +811,12 @@ export default function TimeSheetForm() {
   };
 
   const handleRemoveProject = (customerName: string, projectName: string) => {
-    const updatedCustomers = customers.map(c => {
+    setCustomers(prevCustomers => prevCustomers.map(c => {
         if (c.name === customerName) {
             return { ...c, projects: c.projects.filter(p => p !== projectName) };
         }
         return c;
-    });
-    setCustomers(updatedCustomers);
-    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
+    }));
     toast({
         title: "Project Removed",
         description: `Successfully removed "${projectName}" from ${customerName}.`,
@@ -1392,3 +1390,5 @@ export default function TimeSheetForm() {
     </Card>
   )
 }
+
+    
