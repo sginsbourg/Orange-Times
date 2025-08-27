@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -75,6 +75,7 @@ const ID_COUNTER_KEY = "timesheetIdCounter";
 export default function TimeSheetForm() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
+  const [calculatedHours, setCalculatedHours] = useState<number>(0);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -86,18 +87,32 @@ export default function TimeSheetForm() {
 
   const watchedValues = form.watch();
 
+  const calculateHours = (entrance: string, exit: string): number => {
+    if (!entrance || !exit) return 0;
+    const entranceDate = new Date(`1970-01-01T${entrance}:00`);
+    const exitDate = new Date(`1970-01-01T${exit}:00`);
+    if (exitDate <= entranceDate) return 0;
+    const diff = exitDate.getTime() - entranceDate.getTime();
+    return parseFloat((diff / (1000 * 60 * 60)).toFixed(2));
+  }
+
   useEffect(() => {
     try {
       const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (savedData) {
         const parsedData = JSON.parse(savedData);
-        form.reset({
+        const validatedData = {
           ...parsedData,
-          date: parsedData.date ? new Date(parsedData.date) : new Date()
-        });
+          date: parsedData.date ? new Date(parsedData.date) : new Date(),
+        };
+        form.reset(validatedData);
+        setCalculatedHours(calculateHours(validatedData.entranceTime, validatedData.exitTime));
+      } else {
+        setCalculatedHours(calculateHours(form.getValues("entranceTime"), form.getValues("exitTime")));
       }
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
+      setCalculatedHours(calculateHours(form.getValues("entranceTime"), form.getValues("exitTime")));
     }
     setIsMounted(true);
   }, [form]);
@@ -107,6 +122,7 @@ export default function TimeSheetForm() {
       try {
         const dataToSave = JSON.stringify(watchedValues);
         localStorage.setItem(LOCAL_STORAGE_KEY, dataToSave);
+        setCalculatedHours(calculateHours(watchedValues.entranceTime, watchedValues.exitTime));
       } catch (error) {
         console.error("Failed to save data to localStorage", error);
       }
@@ -136,15 +152,6 @@ export default function TimeSheetForm() {
     
     return `${yearMonth}-${String(counter).padStart(4, '0')}`;
   }
-  
-  const calculateHours = (entrance: string, exit: string): number => {
-    const entranceDate = new Date(`1970-01-01T${entrance}:00`);
-    const exitDate = new Date(`1970-01-01T${exit}:00`);
-    if (exitDate <= entranceDate) return 0;
-    const diff = exitDate.getTime() - entranceDate.getTime();
-    return parseFloat((diff / (1000 * 60 * 60)).toFixed(2));
-  }
-
 
   const generateCsvContent = (values: FormData, id: string) => {
     const headers = "ID,Customer,Date,Hours";
@@ -311,6 +318,12 @@ export default function TimeSheetForm() {
                   </FormItem>
                 )}
               />
+            </div>
+
+            <div className="flex items-center justify-center text-lg font-medium p-4 bg-muted rounded-md">
+              <Hourglass className="mr-2 h-5 w-5 text-primary" />
+              <span>Total Hours:</span>
+              <span className="ml-2 font-bold text-primary">{calculatedHours.toFixed(2)}</span>
             </div>
             
             <div className="flex flex-col sm:flex-row gap-2">
