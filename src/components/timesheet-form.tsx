@@ -135,7 +135,7 @@ const NEW_PROJECT_FORM_STORAGE_KEY = "timesheetNewProjectFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
 const CUSTOMERS_KEY = "timesheetCustomers";
-const APP_VERSION = "0.2.3";
+const APP_VERSION = "0.2.4";
 
 const readmeContent = `# Orange Times - User Manual & Technical Specifications
 
@@ -839,7 +839,7 @@ export default function TimeSheetForm() {
           Create your CSV hours report in a few clicks
         </CardDescription>
         <CardDescription className="text-[11px]">
-          Optimized for Android on Samsung Galaxy 24 Plus
+          Optimized for Android on Samsung Galaxy 24+
         </CardDescription>
       </CardHeader>
       <CardContent>
