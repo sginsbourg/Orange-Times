@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
 import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book } from "lucide-react"
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -120,9 +120,6 @@ export default function TimeSheetForm() {
           date: parsedData.date ? new Date(parsedData.date) : new Date(),
         };
         form.reset(validatedData);
-        setCalculatedHours(calculateHours(validatedData.entranceTime, validatedData.exitTime));
-      } else {
-        setCalculatedHours(calculateHours(form.getValues("entranceTime"), form.getValues("exitTime")));
       }
       
       const savedEntries = localStorage.getItem(TIMESHEET_ENTRIES_KEY);
@@ -134,9 +131,8 @@ export default function TimeSheetForm() {
 
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
-      setCalculatedHours(calculateHours(form.getValues("entranceTime"), form.getValues("exitTime")));
     }
-  }, [form]);
+  }, []);
 
   useEffect(() => {
     if (isMounted) {
@@ -149,6 +145,11 @@ export default function TimeSheetForm() {
       }
     }
   }, [watchedValues, isMounted]);
+
+  useEffect(() => {
+     setCalculatedHours(calculateHours(watchedValues.entranceTime, watchedValues.exitTime));
+  }, [watchedValues.entranceTime, watchedValues.exitTime]);
+
   
   const generateReportId = (): string => {
     const now = new Date();
@@ -187,17 +188,19 @@ export default function TimeSheetForm() {
   }
   
 
-  const generateCsvContent = (values: TimesheetEntry) => {
+  const generateCsvContent = (values: TimesheetEntry[]) => {
     const headers = "ID,Customer,Date,Hours";
-    const hours = calculateHours(values.entranceTime, values.exitTime);
-    const row = `"${values.id}","${values.customer}","${format(values.date, "yyyy-MM-dd")}","${hours}"`;
-    return `${headers}\n${row}`;
+    const rows = values.map(entry => {
+        const hours = calculateHours(entry.entranceTime, entry.exitTime);
+        return `"${entry.id}","${entry.customer}","${format(entry.date, "yyyy-MM-dd")}","${hours}"`;
+    });
+    return `${headers}\n${rows.join("\n")}`;
   }
 
   const handleSaveToFile = (values: FormData) => {
     try {
       const newEntry = addTimesheetEntry(values);
-      const csvContent = generateCsvContent(newEntry);
+      const csvContent = generateCsvContent([newEntry]);
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -227,7 +230,7 @@ export default function TimeSheetForm() {
   const handleExportToEmail = (values: FormData) => {
     try {
       const newEntry = addTimesheetEntry(values);
-      const csvContent = generateCsvContent(newEntry);
+      const csvContent = generateCsvContent([newEntry]);
       const subject = `Timesheet Report ${newEntry.id} for ${values.customer}`;
       const body = `Hi,\n\nPlease find the attached timesheet data (Report ID: ${newEntry.id}).\n\n${csvContent}\n\nThanks,`;
       const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -266,13 +269,7 @@ export default function TimeSheetForm() {
         return;
       }
 
-      const headers = "ID,Customer,Date,Hours";
-      const rows = filteredEntries.map(entry => {
-        const hours = calculateHours(entry.entranceTime, entry.exitTime);
-        return `"${entry.id}","${entry.customer}","${format(entry.date, "yyyy-MM-dd")}","${hours}"`;
-      });
-
-      const csvContent = `${headers}\n${rows.join("\n")}`;
+      const csvContent = generateCsvContent(filteredEntries);
       const totalHours = filteredEntries.reduce((acc, entry) => acc + calculateHours(entry.entranceTime, entry.exitTime), 0);
 
       const subject = `Monthly Timesheet Report for ${customer} - ${format(month, "MMMM yyyy")}`;
@@ -296,10 +293,10 @@ export default function TimeSheetForm() {
 
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    addTimesheetEntry(values);
+    const newEntry = addTimesheetEntry(values);
     toast({
       title: "Entry Saved!",
-      description: "Your timesheet entry has been saved locally.",
+      description: `Your timesheet entry ${newEntry.id} has been saved locally.`,
     });
   }
 
