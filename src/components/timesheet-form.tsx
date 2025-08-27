@@ -42,13 +42,18 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { Separator } from "@/components/ui/separator"
 
-const customers = [
-  "Innovate Inc.",
-  "Quantum Solutions",
-  "Stellar Corp.",
-  "Apex Industries",
-  "Nexus Global",
-]
+type Customer = {
+  name: string;
+  email: string;
+};
+
+const initialCustomers: Customer[] = [
+  { name: "Innovate Inc.", email: "" },
+  { name: "Quantum Solutions", email: "" },
+  { name: "Stellar Corp.", email: "" },
+  { name: "Apex Industries", email: "" },
+  { name: "Nexus Global", email: "" },
+];
 
 const formSchema = z.object({
   customer: z.string({
@@ -70,6 +75,7 @@ const formSchema = z.object({
 const monthlyReportSchema = z.object({
     customer: z.string({ required_error: "Please select a customer." }),
     month: z.date({ required_error: "Please select a month." }),
+    customerEmail: z.string().email("Please enter a valid email.").optional().or(z.literal('')),
 });
 
 
@@ -79,12 +85,15 @@ type TimesheetEntry = FormData & { id: string };
 const DAILY_FORM_STORAGE_KEY = "timesheetFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
+const CUSTOMERS_KEY = "timesheetCustomers";
+
 
 export default function TimeSheetForm() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
   const [calculatedHours, setCalculatedHours] = useState<number>(0);
   const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -99,6 +108,7 @@ export default function TimeSheetForm() {
   });
 
   const watchedValues = form.watch();
+  const watchedMonthlyCustomer = monthlyReportForm.watch("customer");
 
   const calculateHours = (entrance: string, exit: string): number => {
     if (!entrance || !exit) return 0;
@@ -128,6 +138,11 @@ export default function TimeSheetForm() {
           const validatedEntries = parsedEntries.map((e: any) => ({...e, date: new Date(e.date)}));
           setTimesheetEntries(validatedEntries);
       }
+      
+      const savedCustomers = localStorage.getItem(CUSTOMERS_KEY);
+      if (savedCustomers) {
+        setCustomers(JSON.parse(savedCustomers));
+      }
 
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
@@ -149,6 +164,15 @@ export default function TimeSheetForm() {
   useEffect(() => {
      setCalculatedHours(calculateHours(watchedValues.entranceTime, watchedValues.exitTime));
   }, [watchedValues.entranceTime, watchedValues.exitTime]);
+
+  useEffect(() => {
+    if (watchedMonthlyCustomer) {
+      const customer = customers.find(c => c.name === watchedMonthlyCustomer);
+      if (customer) {
+        monthlyReportForm.setValue("customerEmail", customer.email);
+      }
+    }
+  }, [watchedMonthlyCustomer, customers, monthlyReportForm]);
 
   
   const generateReportId = (): string => {
@@ -250,7 +274,15 @@ export default function TimeSheetForm() {
 
   const handleMonthlyReport = (values: z.infer<typeof monthlyReportSchema>) => {
     try {
-      const { customer, month } = values;
+      const { customer, month, customerEmail } = values;
+
+      const updatedCustomers = customers.map(c => 
+        c.name === customer ? { ...c, email: customerEmail || "" } : c
+      );
+      setCustomers(updatedCustomers);
+      localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
+
+
       const reportYear = month.getFullYear();
       const reportMonth = month.getMonth();
 
@@ -274,7 +306,7 @@ export default function TimeSheetForm() {
 
       const subject = `Monthly Timesheet Report for ${customer} - ${format(month, "MMMM yyyy")}`;
       const body = `Hi,\n\nPlease find the monthly timesheet report for ${customer} for ${format(month, "MMMM yyyy")}.\n\nTotal Hours: ${totalHours.toFixed(2)}\n\n--- CSV Data ---\n${csvContent}\n\nThanks,`;
-      const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const mailtoLink = `mailto:${customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       
       window.location.href = mailtoLink;
       
@@ -323,8 +355,8 @@ export default function TimeSheetForm() {
                     </FormControl>
                     <SelectContent>
                       {customers.map((customer) => (
-                        <SelectItem key={customer} value={customer}>
-                          {customer}
+                        <SelectItem key={customer.name} value={customer.name}>
+                          {customer.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -446,8 +478,8 @@ export default function TimeSheetForm() {
                                     </FormControl>
                                     <SelectContent>
                                     {customers.map((customer) => (
-                                        <SelectItem key={customer} value={customer}>
-                                        {customer}
+                                        <SelectItem key={customer.name} value={customer.name}>
+                                        {customer.name}
                                         </SelectItem>
                                     ))}
                                     </SelectContent>
@@ -456,6 +488,21 @@ export default function TimeSheetForm() {
                             </FormItem>
                         )}
                     />
+                     {watchedMonthlyCustomer && (
+                        <FormField
+                            control={monthlyReportForm.control}
+                            name="customerEmail"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4 text-muted-foreground" />Customer Email</FormLabel>
+                                    <FormControl>
+                                        <Input type="email" placeholder="Enter customer's email" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    )}
                     <FormField
                         control={monthlyReportForm.control}
                         name="month"
