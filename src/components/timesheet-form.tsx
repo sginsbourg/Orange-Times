@@ -136,7 +136,7 @@ const NEW_PROJECT_FORM_STORAGE_KEY = "timesheetNewProjectFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
 const CUSTOMERS_KEY = "timesheetCustomers";
-const APP_VERSION = "0.2.6";
+const APP_VERSION = "0.2.7";
 
 const readmeContent = `# Orange Times - User Manual & Technical Specifications
 
@@ -230,6 +230,7 @@ At the bottom of the page, the "Review Entries" table displays all the timesheet
 *   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 *   **Component Library**: [shadcn/ui](https://ui.shadcn.com/)
 *   **Icons**: [Lucide React](https://lucide.dev/)
+*   **AI/Server-side**: [Genkit](https://firebase.google.com/docs/genkit)
 
 ### 2.2. Data Persistence
 
