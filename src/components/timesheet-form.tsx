@@ -135,6 +135,7 @@ const NEW_PROJECT_FORM_STORAGE_KEY = "timesheetNewProjectFormData";
 const TIMESHEET_ENTRIES_KEY = "timesheetEntries";
 const ID_COUNTER_KEY = "timesheetIdCounter";
 const CUSTOMERS_KEY = "timesheetCustomers";
+const APP_VERSION = "0.1.7";
 
 const readmeContent = `# Orange Times - User Manual & Technical Specifications
 
@@ -162,15 +163,25 @@ You have three options for each entry:
 
 *   **Save Entry**: Saves the entry to your browser's local storage. It will appear in the "Review Entries" table at the bottom of the page. This is ideal for logging entries throughout the day.
 *   **Save to File**: Saves the entry locally and immediately downloads a CSV file containing only that single entry.
-*   **Export to Email**: Saves the entry locally and opens your default email client with a pre-filled email containing the entry's details and CSV data in the body.
+*   **Export to Email**: Saves the entry locally and opens your default email client with a pre-filled email containing the entry's details. You will be prompted to attach the generated CSV file.
 
 #### 1.3. Managing Customers
 
-You can add new customers to your list.
+This section allows you to maintain your customer list.
 
-1.  Navigate to the "Add New Customer" section.
-2.  Enter the customer's **Full Name**, **Company Name**, and an optional **Email Address**.
-3.  Click "Add Customer". The new customer will now be available in all customer selection dropdowns.
+1.  **Add a Customer**:
+    *   Click the "Add New Customer" button.
+    *   Fill in the customer's **Full Name**, **Company Name**, and an optional **Email Address**.
+    *   Click "Add Customer" to save. New customers are automatically synced with the server.
+2.  **Edit a Customer**:
+    *   Click the pencil icon next to a customer's name.
+    *   Modify their details in the dialog that appears.
+    *   Click "Save Changes". Any name change will be automatically updated in all existing timesheet entries.
+3.  **Delete a Customer**:
+    *   Click the "X" icon next to a customer's name.
+    *   Confirm the action in the "Are you sure?" dialog. This will permanently delete the customer and all of their associated timesheet entries.
+4.  **Sync Customers**:
+    *   Click the "Sync Customers" button to manually upload all locally stored customer data to the server.
 
 #### 1.4. Managing Projects
 
@@ -183,7 +194,7 @@ You can add or remove projects for each customer.
     *   Click "Add Project".
 2.  **Remove a Project**:
     *   In the project list under the "Manage Projects" form, find the project you wish to remove.
-    *   Click the trash can icon next to the project name.
+    *   Click the trash can icon next to the project name and confirm the deletion.
 
 #### 1.5. Generating a Monthly Report
 
@@ -192,7 +203,7 @@ This feature compiles all entries for a specific customer and month into a singl
 1.  Navigate to the "Monthly Report" section.
 2.  Select the **Customer** and the desired **Month**.
 3.  The customer's email address will be auto-filled if it has been saved before. You can also update it here.
-4.  Click "Email Monthly Report". This action opens your email client with a pre-filled email containing a summary, total hours, and all relevant timesheet entries in CSV format.
+4.  Click "Email Monthly Report". This action opens your email client with a pre-filled email containing a summary, total hours in **bold**, a detailed list of all entries for the month, and the full CSV data in the body.
 
 #### 1.6. Backing Up Your Data
 
@@ -204,7 +215,7 @@ You can create a complete backup of all your saved timesheet entries.
 
 #### 1.7. Reviewing Entries
 
-At the bottom of the page, the "Review Entries" table displays all the timesheet entries you have saved locally. You can quickly verify your logged hours, dates, and project details here.
+At the bottom of the page, the "Review Entries" table displays all the timesheet entries you have saved locally. You can quickly verify your logged hours, dates, and project details. You can also delete an entry by clicking the trash can icon and confirming the action.
 
 ---
 
@@ -226,7 +237,7 @@ At the bottom of the page, the "Review Entries" table displays all the timesheet
     *   All timesheet entries.
     *   The list of customers and their associated projects and emails.
     *   The current state of all input forms to prevent data loss on page refresh.
-*   **Privacy**: Because data is stored locally, it is completely private to the user's machine and browser. It is not transmitted over the network or stored on any server.
+*   **Privacy**: Because data is stored locally, it is completely private to the user's machine and browser. It is not transmitted over the network or stored on any server except when explicitly synced.
 
 ### 2.3. Forms and Validation
 
@@ -240,6 +251,7 @@ At the bottom of the page, the "Review Entries" table displays all the timesheet
 *   \`src/components/ui/\`: Contains all the reusable UI components from the shadcn/ui library.
 *   \`src/lib/utils.ts\`: Utility functions, primarily for merging Tailwind CSS classes.
 *   \`src/hooks/\`: Contains custom React hooks, such as \`use-toast\` for notifications.
+*   \`src/ai/\`: Contains Genkit flows for server-side operations like adding customers.
 *   \`public/\`: Public assets for the application.
 `;
 
@@ -299,8 +311,8 @@ export default function TimeSheetForm() {
 
   const calculateHours = (entrance: string, exit: string): number => {
     if (!entrance || !exit) return 0;
-    const entranceDate = new Date("1970-01-01T" + entrance + ":00");
-    const exitDate = new Date("1970-01-01T" + exit + ":00");
+    const entranceDate = new Date(`1970-01-01T${entrance}:00`);
+    const exitDate = new Date(`1970-01-01T${exit}:00`);
     if (exitDate <= entranceDate) return 0;
     const diff = exitDate.getTime() - entranceDate.getTime();
     return parseFloat((diff / (1000 * 60 * 60)).toFixed(2));
@@ -1083,11 +1095,29 @@ export default function TimeSheetForm() {
                             <h4 className="font-semibold">{customer.name}'s Projects:</h4>
                             <div className="flex flex-wrap gap-2 mt-1">
                                 {customer.projects.map(project => (
-                                    <Badge key={project} variant="secondary" className="flex items-center gap-1">
+                                    <Badge key={project} variant="secondary" className="flex items-center gap-1 pr-1">
                                         {project}
-                                        <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleRemoveProject(customer.name, project)}>
-                                            <Trash2 className="h-3 w-3" />
-                                        </Button>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-4 w-4 -mr-1 text-muted-foreground hover:bg-destructive/20 hover:text-destructive">
+                                                    <Trash2 className="h-3 w-3" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This action will permanently delete the project "{project}" from "{customer.name}".
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleRemoveProject(customer.name, project)}>
+                                                        Delete
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     </Badge>
                                 ))}
                             </div>
@@ -1294,7 +1324,7 @@ export default function TimeSheetForm() {
             </div>
         </CardContent>
         <CardFooter className="justify-center text-xs text-muted-foreground pt-6">
-            Version 0.1.0
+            Version {APP_VERSION}
         </CardFooter>
       <Dialog open={isCustomerDialogOpen} onOpenChange={setIsCustomerDialogOpen}>
         <DialogContent>
