@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
-import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book } from "lucide-react"
+import { CalendarIcon, Download, Clock, Users, Mail, Save, Hourglass, Book, Archive } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -331,6 +331,38 @@ export default function TimeSheetForm() {
       description: `Your timesheet entry ${newEntry.id} has been saved locally.`,
     });
   }
+  
+  const handleBackupAll = () => {
+    if (timesheetEntries.length === 0) {
+      toast({
+        title: "No Data",
+        description: "There are no timesheet entries to back up.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const csvContent = generateCsvContent(timesheetEntries);
+      const subject = "Timesheet Data Backup";
+      const body = `Hi,\n\nAttached is your full timesheet data backup.\n\n--- CSV Data ---\n${csvContent}\n\nThanks,`;
+      const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      
+      window.location.href = mailtoLink;
+
+      toast({
+        title: "Success!",
+        description: "Backup has been prepared for email.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error generating backup",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
 
   return (
     <Card className="w-full max-w-lg shadow-lg">
@@ -548,6 +580,19 @@ export default function TimeSheetForm() {
                     </Button>
                 </form>
             </Form>
+        </div>
+      </CardContent>
+      <Separator className="my-4" />
+      <CardContent>
+        <div className="space-y-4">
+            <h3 className="text-xl font-semibold text-center flex items-center justify-center"><Archive className="mr-2 h-5 w-5" />Backup</h3>
+            <p className="text-sm text-muted-foreground text-center">
+                Get a copy of all your timesheet data in a single CSV file.
+            </p>
+            <Button onClick={handleBackupAll} className="w-full" variant="outline">
+                <Mail className="mr-2 h-4 w-4" />
+                Email Full Backup
+            </Button>
         </div>
       </CardContent>
     </Card>
