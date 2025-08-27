@@ -56,10 +56,16 @@ const formSchema = z.object({
   date: z.date({
     required_error: "A date is required.",
   }),
-  hours: z.coerce.number().min(0.1, {
-    message: "Hours must be greater than 0.",
-  }),
-})
+  entranceTime: z.string({ required_error: "Entrance time is required." }),
+  exitTime: z.string({ required_error: "Exit time is required." }),
+}).refine(data => {
+    if (!data.entranceTime || !data.exitTime) return true;
+    return data.exitTime > data.entranceTime;
+}, {
+    message: "Exit time must be after entrance time.",
+    path: ["exitTime"],
+});
+
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -73,7 +79,8 @@ export default function TimeSheetForm() {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      hours: 8,
+      entranceTime: "09:00",
+      exitTime: "17:00",
     },
   })
 
@@ -86,7 +93,7 @@ export default function TimeSheetForm() {
         const parsedData = JSON.parse(savedData);
         form.reset({
           ...parsedData,
-          date: new Date(parsedData.date)
+          date: parsedData.date ? new Date(parsedData.date) : new Date()
         });
       }
     } catch (error) {
@@ -129,10 +136,20 @@ export default function TimeSheetForm() {
     
     return `${yearMonth}-${String(counter).padStart(4, '0')}`;
   }
+  
+  const calculateHours = (entrance: string, exit: string): number => {
+    const entranceDate = new Date(`1970-01-01T${entrance}:00`);
+    const exitDate = new Date(`1970-01-01T${exit}:00`);
+    if (exitDate <= entranceDate) return 0;
+    const diff = exitDate.getTime() - entranceDate.getTime();
+    return parseFloat((diff / (1000 * 60 * 60)).toFixed(2));
+  }
+
 
   const generateCsvContent = (values: FormData, id: string) => {
     const headers = "ID,Customer,Date,Hours";
-    const row = `"${id}","${values.customer}","${format(values.date, "yyyy-MM-dd")}","${values.hours}"`;
+    const hours = calculateHours(values.entranceTime, values.exitTime);
+    const row = `"${id}","${values.customer}","${format(values.date, "yyyy-MM-dd")}","${hours}"`;
     return `${headers}\n${row}`;
   }
 
@@ -267,19 +284,35 @@ export default function TimeSheetForm() {
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="hours"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4 text-muted-foreground" />Hours Worked</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="0.1" placeholder="e.g. 8" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+               <FormField
+                control={form.control}
+                name="entranceTime"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4 text-muted-foreground" />Entrance Time</FormLabel>
+                    <FormControl>
+                      <Input type="time" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="exitTime"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4 text-muted-foreground" />Exit Time</FormLabel>
+                    <FormControl>
+                      <Input type="time" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
             <div className="flex flex-col sm:flex-row gap-2">
                 <Button type="button" onClick={form.handleSubmit(handleSaveToFile)} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
                     <Save className="mr-2 h-4 w-4" />
